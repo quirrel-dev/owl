@@ -4,7 +4,6 @@ import { Closable } from "../Closable";
 import { Job } from "../Job";
 import * as fs from "fs";
 import * as path from "path";
-import { duplicateRedis } from "../util/duplicateRedis";
 import type { ScheduleMap } from "../index";
 
 declare module "ioredis" {
