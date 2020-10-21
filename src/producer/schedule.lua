@@ -9,14 +9,21 @@
     ARGV[1] id
     ARGV[2] queue
     ARGV[3] payload
-    ARGV[4] scheduled execution date ("-inf" for immediate execution)
+    ARGV[4] scheduled execution date
+    ARGV[5] schedule_type
+    ARGV[6] schedule_meta
 ]]
 
 -- adds job data to table
-redis.call("HSET", KEYS[1], "payload", ARGV[3])
+if not ARGV[5] then
+  redis.call("HSET", KEYS[1], "payload", ARGV[3])
+else
+  redis.call("HSET", KEYS[1], "payload", ARGV[3], "schedule_type", ARGV[5], "schedule_meta", ARGV[6])
+end
+
 redis.call("SADD", KEYS[2], ARGV[1])
 
--- enqueus it
+-- enqueues it
 redis.call("ZADD", KEYS[3], ARGV[4], ARGV[2] .. ":" .. ARGV[1])
 
 -- publishes "scheduled" to "<queue>:<id>"

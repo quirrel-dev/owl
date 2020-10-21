@@ -14,7 +14,9 @@ declare module "ioredis" {
       id: string,
       queue: string,
       payload: string,
-      executionDate: number | "-inf",
+      executionDate: number,
+      schedule_type: string | undefined,
+      schedule_meta: string | undefined
     ): Promise<void>;
   }
 }
@@ -37,7 +39,9 @@ export class Producer<ScheduleType extends string> implements Closable {
       job.id,
       job.queue,
       job.payload,
-      job.runAt ? +job.runAt : "-inf",
+      job.runAt ? +job.runAt : 0,
+      job.schedule?.type,
+      job.schedule?.meta
     );
   }
 

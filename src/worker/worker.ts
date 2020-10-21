@@ -23,14 +23,16 @@ declare module "ioredis" {
           schedule_meta: string
         ]
       | null
+      | number
     >;
     acknowledge(
       jobTableQueueIdKey: string,
       jobTableQueueIndex: string,
       processingKey: string,
+      scheduledQueueKey: string,
       id: string,
       queue: string,
-      timestampToRescheduleFor: number | "-inf" | undefined
+      timestampToRescheduleFor: number | undefined
     ): Promise<void>;
   }
 }
@@ -62,30 +64,34 @@ export class Worker implements Closable {
 
     this.redis.defineCommand("acknowledge", {
       lua: fs.readFileSync(path.join(__dirname, "acknowledge.lua")).toString(),
-      numberOfKeys: 3,
+      numberOfKeys: 4,
     });
 
     this.events.on("next", () => this.requestNextJobs());
 
     this.redisSub.on("message", (channel: string) => {
-      if (channel === "enqueued") {
+      if (channel === "scheduled") {
         this.events.emit("next");
       }
     });
-    this.redisSub.subscribe("enqueued");
+    this.redisSub.subscribe("scheduled");
 
     this.events.emit("next");
   }
 
   isMaxedOut() {
+    if (this.currentlyProcessingJobs.size >= this.maximumConcurrency) {
+      console.log("maxed out");
+      process.exit(1);
+    }
     return this.currentlyProcessingJobs.size >= this.maximumConcurrency;
   }
 
   private getNextExecutionDate(
-    schedule_type: string | undefined,
-    schedule_meta: string | undefined
-  ): number | "-inf" | undefined {
-    if (!schedule_type || !schedule_meta) {
+    schedule_type: string,
+    schedule_meta: string
+  ): number | undefined {
+    if (!schedule_type) {
       return undefined;
     }
 
@@ -95,14 +101,11 @@ export class Worker implements Closable {
     }
 
     const result = scheduleFunc(new Date(), schedule_meta);
-
-    if (result === "immediate") {
-      return "-inf"
+    if (!result) {
+      return undefined;
     }
 
-    if (result) {
-      return +result;
-    }
+    return +result;
   }
 
   private async requestNextJobs() {
@@ -110,13 +113,23 @@ export class Worker implements Closable {
       return;
     }
 
-    const job = await this.redis.request("queue", "processing", "jobs", Date.now());
-    if (!job) {
+    const result = await this.redis.request(
+      "queue",
+      "processing",
+      "jobs",
+      Date.now()
+    );
+    if (!result) {
+      return;
+    }
+
+    if (typeof result === "number") {
+      setTimeout(() => this.events.emit("next"), Date.now() - result);
       return;
     }
 
     const currentlyProcessing = (async () => {
-      const [queue, id, payload, schedule_type, schedule_meta] = job;
+      const [queue, id, payload, schedule_type, schedule_meta] = result;
       try {
         await this.processor({
           queue,
@@ -135,13 +148,18 @@ export class Worker implements Closable {
 
         this.onError?.({ queue, id, payload }, error);
       } finally {
+        const nextExecDate = this.getNextExecutionDate(
+          schedule_type,
+          schedule_meta
+        );
         await this.redis.acknowledge(
           `jobs:${queue}:${id}`,
           `queues:${queue}`,
           "processing",
+          "queue",
           id,
           queue,
-          this.getNextExecutionDate(schedule_type, schedule_meta)
+          nextExecDate
         );
       }
     })();

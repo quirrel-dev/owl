@@ -20,18 +20,29 @@
       - schedule meta (if exists)
 ]]
 
-local result = redis.call("ZRANGEBYSCORE", KEYS[1], "-inf", ARGV[2], "LIMIT", "0", "1")
+local result = redis.call("ZRANGE", KEYS[1], 0, 0, "WITHSCORES")
 local queueAndId = result[1]
+local scoreString = result[2]
 
 if not queueAndId then
-  return -1
+  return nil
+end
+
+local score = tonumber(scoreString)
+
+if score > tonumber(ARGV[2]) then
+  return score
 end
 
 redis.call("SADD", KEYS[2], queueAndId)
 redis.call("ZREM", KEYS[1], queueAndId)
 local queue, id = queueAndId:match("([^,]+):([^,]+)")
 
-local payload, schedule_type, schedule_meta = redis.call("HGET", ARGV[1] .. ":" .. queueAndId, "payload", "schedule_type", "schedule_meta")
+local jobData = redis.call("HMGET", ARGV[1] .. ":" .. queueAndId, "payload", "schedule_type", "schedule_meta")
+
+local payload = jobData[1]
+local schedule_type = jobData[2]
+local schedule_meta = jobData[3]
 
 -- publishes "requested" to "<queue>:<id>"
 redis.call("PUBLISH", queue .. ":" .. id, "requested")

@@ -5,7 +5,7 @@ import RedisMock from "ioredis-mock";
 
 export type ScheduleMap<ScheduleType extends string> = Record<
   ScheduleType,
-  (lastExecution: Date, scheduleMeta: string) => Date | null | "immediate"
+  (lastExecution: Date, scheduleMeta: string) => Date | null
 >;
 
 export default class Owl<ScheduleType extends string> {

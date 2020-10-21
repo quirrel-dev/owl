@@ -1,114 +1,114 @@
-import RedisOwl, { MockOwl } from "../src";
+import RedisOwl, { MockOwl, ScheduleMap } from "../src";
 import delay from "delay";
+import Redis, { Redis as IORedis } from "ioredis";
+import test from "ava";
 
-function Test(name: string, owl: RedisOwl<"every">) {
-  describe(name, () => {
-    test("queueing flow", async () => {
-      const executedPayloads: string[] = [];
+function Test(name: string, getOwl: () => RedisOwl<"every">) {
+  const owl = getOwl();
 
-      const worker = owl.createWorker(async (job) => {
-        executedPayloads.push(job.payload);
-      });
+  const redis: IORedis = (owl as any).redis;
+  test.beforeEach(async () => {
+    await redis.flushall();
+  });
 
-      const producer = owl.createProducer();
+  test.serial(name + " > queueing flow", async (t) => {
+    t.plan(1);
+    t.timeout(500, "give it a bit of headspace")
 
-      await producer.enqueue({
-        id: "1234",
-        queue: "bakery",
-        payload: "bread",
-      });
-
-      await delay(10);
-
-      expect(executedPayloads).toEqual(["bread"]);
-
-      await producer.close();
-      await worker.close();
+    const worker = owl.createWorker(async (job) => {
+      t.pass(job.payload);
     });
 
-    test("a lot of queued jobs", async () => {
-      let numberExecuted = 0;
-      const worker = owl.createWorker(async () => {
-        await delay(10);
-        numberExecuted++;
+    const producer = owl.createProducer();
+
+    await producer.enqueue({
+      id: "1234",
+      queue: "bakery",
+      payload: "bread",
+    });
+
+    await producer.close();
+    await worker.close();
+  });
+
+  test.serial(name + " > a lot of queued jobs", async (t) => {
+    const jobNumber = 50;
+    t.plan(jobNumber);
+    const worker = owl.createWorker(async () => {
+      t.pass();
+    });
+
+    const producer = owl.createProducer();
+
+    for (let i = 0; i < jobNumber; i++) {
+      await producer.enqueue({
+        id: "" + i,
+        queue: "bakery",
+        payload: "",
       });
+    }
 
-      const producer = owl.createProducer();
+    await producer.close();
+    await worker.close();
+  });
 
-      for (let i = 0; i < 50; i++) {
-        await producer.enqueue({
-          id: "" + i,
-          queue: "bakery",
-          payload: "",
-        });
+  test.serial(name + " > failing job", async (t) => {
+    t.plan(1);
+    const worker = owl.createWorker(
+      async (job) => {
+        throw new Error("epic fail");
+      },
+      (job, err) => {
+        t.is(err.message, "epic fail");
       }
+    );
 
-      await delay(200);
+    const producer = owl.createProducer();
 
-      expect(numberExecuted).toBe(50);
-
-      await producer.close();
-      await worker.close();
+    await producer.enqueue({
+      id: "1234",
+      queue: "bakery",
+      payload: "bread",
     });
 
-    test("failing job", async () => {
-      const worker = owl.createWorker(
-        async (job) => {
-          throw new Error("epic fail");
-        },
-        (job, err) => {
-          expect(err.message).toBe("epic fail");
-        }
-      );
+    await delay(10);
 
-      const producer = owl.createProducer();
+    await producer.close();
+    await worker.close();
+  });
 
-      await producer.enqueue({
-        id: "1234",
-        queue: "bakery",
-        payload: "bread",
-      });
+  test.serial(name + " > every 50ms", async (t) => {
+    t.plan(2);
+    t.timeout(500, "give it a bit of headspace")
 
-      await delay(10);
-
-      await producer.close();
-      await worker.close();
+    const worker = owl.createWorker(async (job) => {
+      t.pass();
     });
 
-    test("every 50ms", async () => {
-      let executions = 0
-      const worker = owl.createWorker(
-        async (job) => {
-          executions++;
-        }
-      );
+    const producer = owl.createProducer();
 
-      const producer = owl.createProducer();
-
-      await producer.enqueue({
-        id: "1234",
-        queue: "bakery",
-        payload: "bread",
-        schedule: {
-          type: "every",
-          meta: "50"
-        }
-      });
-
-      await delay(100);
-
-      expect(executions).toBe(2);
-
-      await producer.close();
-      await worker.close();
+    await producer.enqueue({
+      id: "1234",
+      queue: "bakery",
+      payload: "bread",
+      schedule: {
+        type: "every",
+        meta: "50",
+      },
     });
+
+    await delay(100);
+
+    await producer.close();
+    await worker.close();
   });
 }
 
-// Test("Redis", RedisOwl);
-Test(
-  "Mocked",
-  new MockOwl({
-    every: (lastExecution, meta) => new Date(+lastExecution + Number(meta)),
-  })
-);
+Test.skip = (_name: string, _redis: () => RedisOwl<"every">) => {};
+
+const scheduleMap: ScheduleMap<"every"> = {
+  every: (lastExecution, meta) => new Date(+lastExecution + Number(meta)),
+};
+
+Test("Redis", () => new RedisOwl(new Redis(), scheduleMap));
+Test.skip("Mocked", () => new MockOwl(scheduleMap));
