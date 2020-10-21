@@ -3,16 +3,16 @@
 This repository contains the code to `@quirrel/owl`.
 It's a queueing library built around the following requirements:
 
-- optimised for high throughput
-- optimised for short-running jobs
-- delayed & repeated scheduling at totally custom schedules
-- written in TypeScript
-- has an activity log
-- supports fast queries on scheduled jobs
-- supports both idempotency / override characteristics
-- can manage *a lot* of queues
-- queues don't need to be specified beforehand
-- works both with Redis and with an in-memory mock (for development)
+- [x] optimised for high throughput
+- [x] optimised for short-running jobs
+- [x] delayed & repeated scheduling at totally custom schedules
+- [x] written in TypeScript
+- [x] has an activity log
+- [ ] supports fast queries on scheduled jobs
+- [ ] supports both idempotency / override characteristics
+- [x] can manage *a lot* of queues
+- [x] queues don't need to be specified beforehand
+- [ ] works both with Redis and with an in-memory mock (for development)
 
 ## How does it work?
 

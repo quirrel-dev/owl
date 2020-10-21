@@ -12,6 +12,7 @@
 
   Output:
     nil, if no job was found
+    number, if job was found that's not ready to be executed
     if a job was found:
       - queue
       - id

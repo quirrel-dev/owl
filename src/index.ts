@@ -10,21 +10,22 @@ export type ScheduleMap<ScheduleType extends string> = Record<
 
 export default class Owl<ScheduleType extends string> {
   constructor(
-    private readonly redis: Redis,
+    private readonly redisFactory: () => Redis,
     private readonly scheduleMap: ScheduleMap<ScheduleType> = {} as any
   ) {}
 
   public createWorker(processor: Processor, onError?: OnError) {
-    return new Worker(this.redis, this.scheduleMap, processor, onError);
+    return new Worker(this.redisFactory, this.scheduleMap, processor, onError);
   }
 
   public createProducer() {
-    return new Producer<ScheduleType>(this.redis);
+    return new Producer<ScheduleType>(this.redisFactory);
   }
 }
 
 export class MockOwl<ScheduleType extends string> extends Owl<ScheduleType> {
   constructor(scheduleMap?: ScheduleMap<ScheduleType>) {
-    super(new RedisMock(), scheduleMap);
+    const redis = new RedisMock();
+    super(() => (redis as any).createConnectedClient(), scheduleMap);
   }
 }

@@ -45,17 +45,18 @@ export class Worker implements Closable {
   private readonly events = new EventEmitter();
   private closing = false;
 
+  private readonly redis;
   private readonly redisSub;
 
   constructor(
-    private readonly redis: Redis,
+    redisFactory: () => Redis,
     private readonly scheduleMap: ScheduleMap<string>,
     private readonly processor: Processor,
     private readonly onError?: OnError,
     private readonly maximumConcurrency = 10
   ) {
-    this.redis = duplicateRedis(this.redis);
-    this.redisSub = duplicateRedis(this.redis);
+    this.redis = redisFactory();
+    this.redisSub = redisFactory();
 
     this.redis.defineCommand("request", {
       lua: fs.readFileSync(path.join(__dirname, "request.lua")).toString(),
@@ -79,11 +80,7 @@ export class Worker implements Closable {
     this.events.emit("next");
   }
 
-  isMaxedOut() {
-    if (this.currentlyProcessingJobs.size >= this.maximumConcurrency) {
-      console.log("maxed out");
-      process.exit(1);
-    }
+  private isMaxedOut() {
     return this.currentlyProcessingJobs.size >= this.maximumConcurrency;
   }
 
