@@ -27,3 +27,19 @@ I'll try my best to make the architecture obvious from the code, as well.
 It's well-known that Squirrels 🐿 and Owls 🦉 are good friends.
 Owls are reliable, mostly down-to-earth and know how to deal with time.
 This makes them perfectly suited for the job of a queue keeper.
+
+## Terminology
+
+**Enqueueing** marks a job for immediate execution.
+An *enqueued* job will be picked up by a worker any second.
+
+**Scheduling** will schedule a job to be *enqueued* later.
+
+After a job has been *enqueued*, a *worker* *requests* it.
+This will *lock* it.
+After the job has been fully executed, it is *acknowledged* by the worker.
+
+## Compatibility with Redis Cluster
+
+At the moment, Owl does not aim to be compatible with Redis Cluster.
+This may change in the future, though.
