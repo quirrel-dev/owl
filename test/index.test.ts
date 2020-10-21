@@ -26,6 +26,31 @@ function Test(name: string, owl: RedisOwl) {
       await worker.close();
     });
 
+    test("a lot of queued jobs", async () => {
+      let numberExecuted = 0;
+      const worker = owl.createWorker(async () => {
+        await delay(10);
+        numberExecuted++;
+      });
+
+      const producer = owl.createProducer();
+
+      for (let i = 0; i < 50; i++) {
+        await producer.enqueue({
+          id: "" + i,
+          queue: "bakery",
+          payload: "",
+        });
+      }
+
+      await delay(200);
+
+      expect(numberExecuted).toBe(50);
+
+      await producer.close();
+      await worker.close();
+    });
+
     test("failing job", async () => {
       const worker = owl.createWorker(
         async (job) => {
