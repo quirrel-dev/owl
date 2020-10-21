@@ -9,11 +9,19 @@
 
     ARGV[1] id
     ARGV[2] queue
+    ARGV[3] timestamp to reschedule for (-inf for immediate)
+            if nil, job will be deleted
 ]]
 
-redis.call("LREM", KEYS[3], 0, ARGV[2] .. ":" .. ARGV[1])
-redis.call("DEL", KEYS[1])
-redis.call("SREM", KEYS[2], ARGV[1])
+redis.call("SREM", KEYS[3], ARGV[2] .. ":" .. ARGV[1])
+
+if not ARGV[3] then
+  redis.call("DEL", KEYS[1])
+  redis.call("SREM", KEYS[2], ARGV[1])
+else
+  redis.call("ZADD", KEYS[3], ARGV[3], ARGV[2] .. ":" .. ARGV[1])
+end
+
 
 -- publishes "acknowledged" to "<queue>:<id>"
 redis.call("PUBLISH", ARGV[2] .. ":" .. ARGV[1], "acknowledged")

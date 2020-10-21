@@ -1,7 +1,7 @@
 import RedisOwl, { MockOwl } from "../src";
 import delay from "delay";
 
-function Test(name: string, owl: RedisOwl) {
+function Test(name: string, owl: RedisOwl<"every">) {
   describe(name, () => {
     test("queueing flow", async () => {
       const executedPayloads: string[] = [];
@@ -74,8 +74,41 @@ function Test(name: string, owl: RedisOwl) {
       await producer.close();
       await worker.close();
     });
+
+    test("every 50ms", async () => {
+      let executions = 0
+      const worker = owl.createWorker(
+        async (job) => {
+          executions++;
+        }
+      );
+
+      const producer = owl.createProducer();
+
+      await producer.enqueue({
+        id: "1234",
+        queue: "bakery",
+        payload: "bread",
+        schedule: {
+          type: "every",
+          meta: "50"
+        }
+      });
+
+      await delay(100);
+
+      expect(executions).toBe(2);
+
+      await producer.close();
+      await worker.close();
+    });
   });
 }
 
 // Test("Redis", RedisOwl);
-Test("Mocked", new MockOwl());
+Test(
+  "Mocked",
+  new MockOwl({
+    every: (lastExecution, meta) => new Date(+lastExecution + Number(meta)),
+  })
+);

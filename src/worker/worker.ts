@@ -5,20 +5,32 @@ import { Job } from "../Job";
 import * as fs from "fs";
 import * as path from "path";
 import { duplicateRedis } from "../util/duplicateRedis";
+import type { ScheduleMap } from "../index";
 
 declare module "ioredis" {
   interface Commands {
     request(
       queueKey: string,
       processingKey: string,
-      jobTablePrefix: string
-    ): Promise<[queue: string, id: string, payload: string] | null>;
+      jobTablePrefix: string,
+      currentTimestamp: number
+    ): Promise<
+      | [
+          queue: string,
+          id: string,
+          payload: string,
+          schedule_type: string,
+          schedule_meta: string
+        ]
+      | null
+    >;
     acknowledge(
       jobTableQueueIdKey: string,
       jobTableQueueIndex: string,
       processingKey: string,
       id: string,
-      queue: string
+      queue: string,
+      timestampToRescheduleFor: number | "-inf" | undefined
     ): Promise<void>;
   }
 }
@@ -35,6 +47,7 @@ export class Worker implements Closable {
 
   constructor(
     private readonly redis: Redis,
+    private readonly scheduleMap: ScheduleMap<string>,
     private readonly processor: Processor,
     private readonly onError?: OnError,
     private readonly maximumConcurrency = 10
@@ -68,18 +81,42 @@ export class Worker implements Closable {
     return this.currentlyProcessingJobs.size >= this.maximumConcurrency;
   }
 
+  private getNextExecutionDate(
+    schedule_type: string | undefined,
+    schedule_meta: string | undefined
+  ): number | "-inf" | undefined {
+    if (!schedule_type || !schedule_meta) {
+      return undefined;
+    }
+
+    const scheduleFunc = this.scheduleMap[schedule_type];
+    if (!scheduleFunc) {
+      throw new Error(`Schedule ${schedule_type} not found.`);
+    }
+
+    const result = scheduleFunc(new Date(), schedule_meta);
+
+    if (result === "immediate") {
+      return "-inf"
+    }
+
+    if (result) {
+      return +result;
+    }
+  }
+
   private async requestNextJobs() {
     if (this.isMaxedOut() || this.closing) {
       return;
     }
 
-    const job = await this.redis.request("queue", "processing", "jobs");
+    const job = await this.redis.request("queue", "processing", "jobs", Date.now());
     if (!job) {
       return;
     }
 
     const currentlyProcessing = (async () => {
-      const [queue, id, payload] = job;
+      const [queue, id, payload, schedule_type, schedule_meta] = job;
       try {
         await this.processor({
           queue,
@@ -103,7 +140,8 @@ export class Worker implements Closable {
           `queues:${queue}`,
           "processing",
           id,
-          queue
+          queue,
+          this.getNextExecutionDate(schedule_type, schedule_meta)
         );
       }
     })();
