@@ -1,13 +1,13 @@
 import { Redis } from "ioredis";
 import { Producer } from "./producer/producer";
-import { Processor, Worker } from "./worker/worker";
+import { OnError, Processor, Worker } from "./worker/worker";
 import RedisMock from "ioredis-mock";
 
 export default class Owl {
   constructor(private readonly redis: Redis) {}
 
-  public createWorker(processor: Processor) {
-    return new Worker(this.redis, processor);
+  public createWorker(processor: Processor, onError?: OnError) {
+    return new Worker(this.redis, processor, onError);
   }
 
   public createProducer() {

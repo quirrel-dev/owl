@@ -24,6 +24,7 @@ declare module "ioredis" {
 }
 
 export type Processor = (job: Job) => Promise<void>;
+export type OnError = (job: Job, error: Error) => void;
 
 export class Worker implements Closable {
   private readonly currentlyProcessingJobs: Set<Promise<void>> = new Set();
@@ -35,6 +36,7 @@ export class Worker implements Closable {
   constructor(
     private readonly redis: Redis,
     private readonly processor: Processor,
+    private readonly onError?: OnError,
     private readonly maximumConcurrency = 10
   ) {
     this.redis = duplicateRedis(this.redis);
@@ -76,23 +78,34 @@ export class Worker implements Closable {
       return;
     }
 
-    const data = (this.redis as any).data.get('jobs:bakery:bread')
-
     const currentlyProcessing = (async () => {
       const [queue, id, payload] = job;
-      await this.processor({
-        queue,
-        id,
-        payload,
-      });
+      try {
+        await this.processor({
+          queue,
+          id,
+          payload,
+        });
+      } catch (error) {
+        const pipeline = this.redis.pipeline();
 
-      await this.redis.acknowledge(
-        `jobs:${queue}:${id}`,
-        `queues:${queue}`,
-        "processing",
-        id,
-        queue
-      );
+        pipeline.publish("fail", `${queue}:${id}:${error}`);
+        pipeline.publish(queue, `fail:${id}:${error}`);
+        pipeline.publish(`${queue}:${id}`, `fail:${error}`);
+        pipeline.publish(`${queue}:${id}:fail`, error);
+
+        await pipeline.exec();
+
+        this.onError?.({ queue, id, payload }, error);
+      } finally {
+        await this.redis.acknowledge(
+          `jobs:${queue}:${id}`,
+          `queues:${queue}`,
+          "processing",
+          id,
+          queue
+        );
+      }
     })();
 
     this.currentlyProcessingJobs.add(currentlyProcessing);

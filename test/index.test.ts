@@ -25,6 +25,30 @@ function Test(name: string, owl: RedisOwl) {
       await producer.close();
       await worker.close();
     });
+
+    test("failing job", async () => {
+      const worker = owl.createWorker(
+        async (job) => {
+          throw new Error("epic fail");
+        },
+        (job, err) => {
+          expect(err.message).toBe("epic fail");
+        }
+      );
+
+      const producer = owl.createProducer();
+
+      await producer.enqueue({
+        id: "1234",
+        queue: "bakery",
+        payload: "bread",
+      });
+
+      await delay(10);
+
+      await producer.close();
+      await worker.close();
+    });
   });
 }
 
