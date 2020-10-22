@@ -5,6 +5,8 @@
   "main": "dist/index.js",
   "scripts": {
     "test": "node test/test.js",
+    "test:inmemory": "node test/test.js inmemory",
+    "test:redis": "node test/test.js redis",
     "build": "tsc && node copy-lua.js",
     "prepack": "npm run build"
   },

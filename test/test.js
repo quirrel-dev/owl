@@ -2,9 +2,12 @@ const glob = require("glob");
 const child_process = require("child_process");
 const path = require("path");
 
+// "redis" or "inmemory"
+const version = process.argv[2] || "redis";
+
 function test(file) {
   return new Promise((resolve) => {
-    const p = child_process.fork(path.join(__dirname, file), {
+    const p = child_process.fork(path.join(__dirname, file), [version], {
       stdio: "inherit",
     });
 
@@ -17,7 +20,7 @@ function test(file) {
 async function main() {
   for (const testFile of glob.sync("*.test.js", { cwd: __dirname })) {
     console.log(`🧪 ${testFile} 🧪`);
-    
+
     const exitCode = await test(testFile);
 
     if (exitCode !== 0) {
