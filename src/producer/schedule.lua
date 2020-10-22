@@ -12,7 +12,18 @@
     ARGV[4] scheduled execution date
     ARGV[5] schedule_type
     ARGV[6] schedule_meta
+    ARGV[7] use upsert semantics
+
+  Output:
+    0 if everything went fine
+    1 if upsert semantics weren't used and there was another job with this id
 ]]
+
+if ARGV[7] == "false" then  
+  if redis.call("EXISTS", KEYS[1]) == 1 then
+    return 1
+  end
+end
 
 -- adds job data to table
 if not ARGV[5] then
@@ -32,3 +43,5 @@ redis.call("PUBLISH", ARGV[2] .. ":" .. ARGV[1], "scheduled")
 redis.call("PUBLISH", ARGV[2], "scheduled" .. ":" .. ARGV[1])
 -- publishes "<queue>:<id>" to "scheduled"
 redis.call("PUBLISH", "scheduled", ARGV[2] .. ":" .. ARGV[1])
+
+return 0
