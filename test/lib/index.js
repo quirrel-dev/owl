@@ -11,14 +11,17 @@ const version = process.argv[2] || "redis";
  */
 async function test(jobs, expectations) {
   const $ = new rxjs.Subject();
-  Object.entries(expectations).forEach(([description, expectation]) => {
+
+  let remainingTests = new Set(Object.keys(expectations))
+  Object.entries(expectations).forEach(([testName, expectation]) => {
     const value = expectation.$($);
     value.forEach((v) => {
       const isCorrect = expectation.expect(v);
+      remainingTests.delete(testName)
       if (isCorrect) {
-        console.log(`✅ ${description}`);
+        console.log(`✅ ${testName}`);
       } else {
-        console.log(`❌ ${description}: ${v}`);
+        console.log(`❌ ${testName}: ${v}`);
         process.exitCode = 1;
       }
     });
@@ -61,6 +64,10 @@ async function test(jobs, expectations) {
     producer.close();
     closeWorker();
     $.complete();
+
+    remainingTests.forEach((testName) => {
+      console.log(`🕑 ${testName}`)
+    })
   }, 1000);
 }
 
