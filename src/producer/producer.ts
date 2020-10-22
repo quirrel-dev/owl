@@ -15,8 +15,9 @@ declare module "ioredis" {
       payload: string,
       executionDate: number,
       schedule_type: string | undefined,
-      schedule_meta: string | undefined
-    ): Promise<void>;
+      schedule_meta: string | undefined,
+      useUpsertSemantics: boolean
+    ): Promise<0 | 1>;
   }
 }
 
@@ -41,7 +42,8 @@ export class Producer<ScheduleType extends string> implements Closable {
       job.payload,
       job.runAt ? +job.runAt : 0,
       job.schedule?.type,
-      job.schedule?.meta
+      job.schedule?.meta,
+      job.upsert ?? false
     );
   }
 

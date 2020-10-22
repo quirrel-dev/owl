@@ -11,6 +11,8 @@ export interface JobEnqueue<ScheduleType extends string = string> {
 
   runAt?: Date;
 
+  upsert?: boolean;
+
   /**
    * Optional: Scheduled data.
    */
