@@ -9,11 +9,7 @@ function test(file) {
     });
 
     p.on("exit", () => {
-      resolve(process.exitCode);
-      console.log("\n");
-      if (p.exitCode !== 1) {
-        process.exitCode = 1;
-      }
+      resolve(p.exitCode);
     });
   });
 }
@@ -21,10 +17,14 @@ function test(file) {
 async function main() {
   for (const testFile of glob.sync("*.test.js", { cwd: __dirname })) {
     console.log(`🧪 ${testFile} 🧪`);
+    
     const exitCode = await test(testFile);
+
     if (exitCode !== 0) {
       process.exitCode = 1;
     }
+
+    console.log("");
   }
 }
 
