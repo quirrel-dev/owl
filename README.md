@@ -3,7 +3,7 @@
 This repository contains the code to `@quirrel/owl`.
 It's a queueing library built around the following requirements:
 
-- [ ] optimised for high throughput
+- [x] optimised for high throughput
 - [x] optimised for short-running jobs
 - [x] delayed & repeated scheduling at totally custom schedules
 - [x] written in TypeScript
@@ -12,7 +12,7 @@ It's a queueing library built around the following requirements:
 - [x] supports both idempotency / override characteristics
 - [x] can manage *a lot* of queues
 - [x] queues don't need to be specified beforehand
-- [ ] works both with Redis and with an in-memory mock (for development)
+- [x] works both with Redis and with an in-memory mock (for development)
 
 ## How does it work?
 
