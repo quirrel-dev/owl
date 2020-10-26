@@ -1,7 +1,13 @@
-export interface Job {
+export interface Job<ScheduleType extends string = string> {
   id: string;
   queue: string;
   payload: string;
+
+  runAt: Date;
+  schedule?: {
+    type: ScheduleType;
+    meta: string;
+  };
 }
 
 export interface JobEnqueue<ScheduleType extends string = string> {
