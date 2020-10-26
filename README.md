@@ -30,14 +30,12 @@ This makes them perfectly suited for the job of a queue keeper.
 
 ## Terminology
 
-**Enqueueing** marks a job for immediate execution.
-An *enqueued* job will be picked up by a worker any second.
+Jobs are **scheduled** for later execution by the *producer*.
 
-**Scheduling** will schedule a job to be *enqueued* later.
-
-After a job has been *enqueued*, a *worker* *requests* it.
-This will *lock* it.
-After the job has been fully executed, it is *acknowledged* by the worker.
+Once the time has come for a job to be executed, a *worker* will *request* it.
+This will move it into a list currently *processing* jobs.
+Aftere execution is finished, the worker *acknowledges* it
+and (in case of repeated jobs) re-enqueues it.
 
 ## Compatibility with Redis Cluster
 
