@@ -31,28 +31,23 @@ test(
   ),
   {
     "correct shape": {
-      $: ($) =>
-        $.pipe(
-          every(
-            (v) =>
-              v.id.startsWith("x-") &&
-              typeof v.payload === "string" &&
-              isFinite(+v.payload) &&
-              v.queue === "any"
-          )
+      transform: [
+        every(
+          (v) =>
+            v.id.startsWith("x-") &&
+            typeof v.payload === "string" &&
+            isFinite(+v.payload) &&
+            v.queue === "any"
         ),
+      ],
       expect: (v) => v === true,
     },
     "all jobs arrive": {
-      $: ($) => $.pipe(count()),
+      transform: [count()],
       expect: (v) => v == 100,
     },
     "average delay is berable": {
-      $: ($) =>
-        $.pipe(
-          map((v) => v.time - +v.payload),
-          average
-        ),
+      transform: [map((v) => v.time - +v.payload), average],
       expect: (v) => v < 500,
     },
   }

@@ -12,12 +12,12 @@ test(
       id: "x",
       payload: "b",
       queue: "q",
-      upsert: true
+      upsert: true,
     },
   ],
   {
     "only the second one arrives": {
-      $: ($) => $.pipe(map(j => j.payload)),
+      transform: [map((j) => j.payload)],
       expect: (v) => v.length === 1 && v[0] === "b",
     },
   }

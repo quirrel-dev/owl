@@ -7,17 +7,17 @@ const version = process.argv[2] || "redis";
 
 /**
  * @param {{ id: string, queue: string, payload: string }[]} jobs
- * @param {{ [key: string]: { $: ($: rxjs.Observable<{ id: string, queue: string, payload: string, time: number }>) => rxjs.Observable<any>), expect: (v: any) => boolean } }} expectations
+ * @param {{ [key: string]: { transform: any[], expect: (v: any) => boolean } }} expectations
  */
 async function test(jobs, expectations) {
   const $ = new rxjs.Subject();
 
-  let remainingTests = new Set(Object.keys(expectations))
+  let remainingTests = new Set(Object.keys(expectations));
   Object.entries(expectations).forEach(([testName, expectation]) => {
-    const value = expectation.$($);
+    const value = $.pipe(...expectation.transform);
     value.forEach((v) => {
       const isCorrect = expectation.expect(v);
-      remainingTests.delete(testName)
+      remainingTests.delete(testName);
       if (isCorrect) {
         console.log(`✅ ${testName}`);
       } else {
@@ -45,17 +45,17 @@ async function test(jobs, expectations) {
       redis.quit();
     };
 
-    producer = owl.createProducer()
+    producer = owl.createProducer();
   } else {
-    const { MockOwl } = require("../../dist")
-    const owl = new MockOwl()
+    const { MockOwl } = require("../../dist");
+    const owl = new MockOwl();
 
     const worker = owl.createWorker(async (job) => {
       $.next({ ...job, time: Date.now() });
     });
     closeWorker = () => worker.close();
 
-    producer = owl.createProducer()
+    producer = owl.createProducer();
   }
 
   await Promise.all(jobs.map((job) => producer.enqueue(job)));
@@ -66,8 +66,8 @@ async function test(jobs, expectations) {
     $.complete();
 
     remainingTests.forEach((testName) => {
-      console.log(`🕑 ${testName}`)
-    })
+      console.log(`🕑 ${testName}`);
+    });
   }, 1000);
 }
 
