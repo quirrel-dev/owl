@@ -14,8 +14,8 @@ export default class Owl<ScheduleType extends string> {
     private readonly scheduleMap: ScheduleMap<ScheduleType> = {} as any
   ) {}
 
-  public createWorker(processor: Processor, onError?: OnError) {
-    return new Worker(this.redisFactory, this.scheduleMap, processor, onError);
+  public async createWorker(processor: Processor, onError?: OnError) {
+    return await Worker.create(this.redisFactory, this.scheduleMap, processor, onError);
   }
 
   public createProducer() {

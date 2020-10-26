@@ -1,5 +1,5 @@
 const test = require("./lib");
-const { map } = require("rxjs/operators");
+const { map, toArray } = require("rxjs/operators");
 
 test(
   [
@@ -12,12 +12,12 @@ test(
       id: "x",
       payload: "b",
       queue: "q",
-      upsert: true
+      upsert: true,
     },
   ],
   {
     "only the second one arrives": {
-      $: ($) => $.pipe(map(j => j.payload)),
+      transform: [map((j) => j.payload), toArray()],
       expect: (v) => v.length === 1 && v[0] === "b",
     },
   }

@@ -1,12 +1,19 @@
 const owl = require("./shared");
 
-const worker = owl.createWorker(async (job) => {
-  process.send({
-    ...job,
-    time: Date.now(),
-  });
-});
+owl
+  .createWorker(async (job) => {
+    const [enqueueTime, originalPayload] = job.payload.split(";");
+    process.send({
+      ...job,
+      payload: originalPayload,
+      time: Date.now(),
+      delay: Date.now() - +enqueueTime,
+    });
+  })
+  .then((worker) => {
+    process.send("ready");
 
-process.on("SIGINT", async () => {
-  await worker.close();
-});
+    process.on("SIGINT", async () => {
+      await worker.close();
+    });
+  });

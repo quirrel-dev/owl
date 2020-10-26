@@ -5,6 +5,10 @@ import { Job } from "../Job";
 import * as fs from "fs";
 import * as path from "path";
 import type { ScheduleMap } from "../index";
+import createDebug from "debug";
+import { EggTimer } from "./egg-timer";
+
+const debug = createDebug("owl:worker");
 
 declare module "ioredis" {
   interface Commands {
@@ -47,16 +51,41 @@ export class Worker implements Closable {
   private readonly redis;
   private readonly redisSub;
 
-  constructor(
+  private readonly eggTimer = new EggTimer(() => this.events.emit("next"));
+  private queueIsKnownToBeEmpty = false;
+
+  private constructor(
     redisFactory: () => Redis,
     private readonly scheduleMap: ScheduleMap<string>,
     private readonly processor: Processor,
     private readonly onError?: OnError,
-    private readonly maximumConcurrency = 10
+    private readonly maximumConcurrency = 100
   ) {
     this.redis = redisFactory();
     this.redisSub = redisFactory();
+  }
 
+  static async create(
+    redisFactory: () => Redis,
+    scheduleMap: ScheduleMap<string>,
+    processor: Processor,
+    onError?: OnError,
+    maximumConcurrency = 100
+  ) {
+    const worker = new Worker(
+      redisFactory,
+      scheduleMap,
+      processor,
+      onError,
+      maximumConcurrency
+    );
+
+    await worker.init();
+
+    return worker;
+  }
+
+  private async init() {
     this.redis.defineCommand("request", {
       lua: fs.readFileSync(path.join(__dirname, "request.lua")).toString(),
       numberOfKeys: 2,
@@ -67,16 +96,18 @@ export class Worker implements Closable {
       numberOfKeys: 4,
     });
 
-    this.events.on("next", () => this.requestNextJobs());
+    this.events.on("next", (d) => this.requestNextJobs(d));
 
     this.redisSub.on("message", (channel: string) => {
       if (channel === "scheduled") {
-        this.events.emit("next");
+        debug("pub/sub: received 'scheduled'");
+        this.queueIsKnownToBeEmpty = false;
+        this.events.emit("next", "sub");
       }
     });
-    this.redisSub.subscribe("scheduled");
+    await this.redisSub.subscribe("scheduled");
 
-    this.events.emit("next");
+    this.events.emit("next", "init");
   }
 
   private isMaxedOut() {
@@ -104,8 +135,14 @@ export class Worker implements Closable {
     return +result;
   }
 
-  private async requestNextJobs() {
-    if (this.isMaxedOut() || this.closing) {
+  private async requestNextJobs(origin: string = "") {
+    debug("requestNextJobs() called", origin);
+    if (this.isMaxedOut()) {
+      debug("requestNextJobs(): skipped (worker is maxed out)");
+      return;
+    }
+    if (this.closing) {
+      debug("requestNextJobs(): skipped (worker is closing)");
       return;
     }
 
@@ -115,24 +152,32 @@ export class Worker implements Closable {
       "jobs",
       Date.now()
     );
+
     if (!result) {
+      debug("requestNextJobs(): skipped (queue is empty)");
+      this.queueIsKnownToBeEmpty = true;
       return;
     }
 
     if (typeof result === "number") {
-      setTimeout(() => this.events.emit("next"), Date.now() - result);
+      debug("requestNextJobs(): skipped (next job due at %o)", result);
+      this.eggTimer.setTimer(result);
       return;
     }
 
     const currentlyProcessing = (async () => {
       const [queue, id, payload, schedule_type, schedule_meta] = result;
       try {
+        debug(`requestNextJobs(): job #${id} - started working`);
         await this.processor({
           queue,
           id,
           payload,
         });
+        debug(`requestNextJobs(): job #${id} - finished working`);
       } catch (error) {
+        debug(`requestNextJobs(): job #${id} - failed`);
+
         const pipeline = this.redis.pipeline();
 
         pipeline.publish("fail", `${queue}:${id}:${error}`);
@@ -157,15 +202,27 @@ export class Worker implements Closable {
           queue,
           nextExecDate
         );
+        if (nextExecDate) {
+          debug(
+            `requestNextJobs(): job #${id} - acknowledged (next execution: ${nextExecDate})`
+          );
+        } else {
+          debug(`requestNextJobs(): job #${id} - acknowledged`);
+        }
       }
     })();
 
     this.currentlyProcessingJobs.add(currentlyProcessing);
-    this.events.emit("next");
+    if (!this.queueIsKnownToBeEmpty) {
+      this.events.emit("next");
+    }
 
     await currentlyProcessing;
     this.currentlyProcessingJobs.delete(currentlyProcessing);
-    this.events.emit("next");
+
+    if (!this.queueIsKnownToBeEmpty) {
+      this.events.emit("next");
+    }
   }
 
   public async close() {

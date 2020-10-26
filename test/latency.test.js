@@ -1,5 +1,14 @@
 const test = require("./lib");
-const { map, reduce, count, every } = require("rxjs/operators");
+const {
+  map,
+  reduce,
+  count,
+  every,
+  min,
+  max,
+  tap,
+  distinct,
+} = require("rxjs/operators");
 
 const average = reduce((acc, val, i) => {
   if (i === 0) {
@@ -20,40 +29,51 @@ function repeat(valMaker, number) {
     .map((_, i) => valMaker(i));
 }
 
+const mapExecutionDelay = map((v) => v.delay);
+
+const log = tap(console.log);
+
 test(
   repeat(
     (i) => ({
       id: "x-" + i,
-      payload: "" + Date.now(),
+      payload: "",
       queue: "any",
     }),
-    100
+    1000
   ),
   {
     "correct shape": {
-      $: ($) =>
-        $.pipe(
-          every(
-            (v) =>
-              v.id.startsWith("x-") &&
-              typeof v.payload === "string" &&
-              isFinite(+v.payload) &&
-              v.queue === "any"
-          )
+      transform: [
+        every(
+          (v) =>
+            v.id.startsWith("x-") &&
+            typeof v.payload === "string" &&
+            isFinite(+v.payload) &&
+            v.queue === "any"
         ),
+      ],
       expect: (v) => v === true,
     },
     "all jobs arrive": {
-      $: ($) => $.pipe(count()),
-      expect: (v) => v == 100,
+      transform: [count()],
+      expect: (v) => v == 1000,
     },
-    "average delay is berable": {
-      $: ($) =>
-        $.pipe(
-          map((v) => v.time - +v.payload),
-          average
-        ),
-      expect: (v) => v < 500,
+    "no jobs arrive double": {
+      transform: [distinct((j) => j.id), count()],
+      expect: (v) => v == 1000,
+    },
+    "average delay is bearable": {
+      transform: [mapExecutionDelay, average],
+      expect: (v) => v < 80,
+    },
+    "minimum delay is bearable": {
+      transform: [mapExecutionDelay, min()],
+      expect: (v) => v < 50,
+    },
+    "maximum delay is bearable": {
+      transform: [mapExecutionDelay, max()],
+      expect: (v) => v < 100,
     },
   }
 );
