@@ -59,7 +59,7 @@ export class Worker implements Closable {
     private readonly scheduleMap: ScheduleMap<string>,
     private readonly processor: Processor,
     private readonly onError?: OnError,
-    private readonly maximumConcurrency = 10
+    private readonly maximumConcurrency = 100
   ) {
     this.redis = redisFactory();
     this.redisSub = redisFactory();
@@ -146,12 +146,15 @@ export class Worker implements Closable {
     const currentlyProcessing = (async () => {
       const [queue, id, payload, schedule_type, schedule_meta] = result;
       try {
+        debug(`requestNextJobs(): job #${id} - started working`);
         await this.processor({
           queue,
           id,
           payload,
         });
       } catch (error) {
+        debug(`requestNextJobs(): job #${id} - failed`);
+
         const pipeline = this.redis.pipeline();
 
         pipeline.publish("fail", `${queue}:${id}:${error}`);
@@ -175,6 +178,9 @@ export class Worker implements Closable {
           id,
           queue,
           nextExecDate
+        );
+        debug(
+          `requestNextJobs(): job #${id} - acknowledged (next execution: ${nextExecDate})`
         );
       }
     })();

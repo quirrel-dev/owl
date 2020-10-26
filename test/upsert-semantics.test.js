@@ -1,5 +1,5 @@
 const test = require("./lib");
-const { map } = require("rxjs/operators");
+const { map, toArray } = require("rxjs/operators");
 
 test(
   [
@@ -17,7 +17,7 @@ test(
   ],
   {
     "only the second one arrives": {
-      transform: [map((j) => j.payload)],
+      transform: [map((j) => j.payload), toArray()],
       expect: (v) => v.length === 1 && v[0] === "b",
     },
   }

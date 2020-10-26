@@ -51,14 +51,26 @@ async function test(jobs, expectations) {
     const owl = new MockOwl();
 
     const worker = owl.createWorker(async (job) => {
-      $.next({ ...job, time: Date.now() });
+      const [enqueueTime, originalPayload] = job.payload.split(";");
+      $.next({
+        ...job,
+        payload: originalPayload,
+        time: Date.now(),
+        delay: Date.now() - +enqueueTime,
+      });
     });
     closeWorker = () => worker.close();
 
     producer = owl.createProducer();
   }
 
-  await Promise.all(jobs.map((job) => producer.enqueue(job)));
+  console.time("⏱  time spent on enqueueing");
+  await Promise.all(
+    jobs.map((job) =>
+      producer.enqueue({ ...job, payload: Date.now() + ";" + job.payload })
+    )
+  );
+  console.timeEnd("⏱  time spent on enqueueing");
 
   setTimeout(() => {
     producer.close();
@@ -66,7 +78,7 @@ async function test(jobs, expectations) {
     $.complete();
 
     remainingTests.forEach((testName) => {
-      console.log(`🕑 ${testName}`);
+      console.log(`👀 result is missing: "${testName}"`);
     });
   }, 1000);
 }
