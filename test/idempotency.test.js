@@ -19,5 +19,9 @@ test(
       transform: [map((j) => j.payload), toArray()],
       expect: (v) => v.length === 1 && v[0] === "a",
     },
+    "delay is bearable": {
+      transform: [map((j) => j.delay)],
+      expect: (delay) => delay < 100,
+    },
   }
 );

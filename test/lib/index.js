@@ -37,9 +37,16 @@ async function test(jobs, expectations) {
     await redis.flushall();
 
     const worker = child_process.fork(path.join(__dirname, "worker.js"));
-    worker.on("message", (m) => {
-      $.next(m);
+    await new Promise((resolve) => {
+      worker.on("message", (m) => {
+        if (m === "ready") {
+          resolve();
+        } else {
+          $.next(m);
+        }
+      });
     });
+
     closeWorker = () => {
       worker.kill("SIGINT");
       redis.quit();
@@ -50,7 +57,7 @@ async function test(jobs, expectations) {
     const { MockOwl } = require("../../dist");
     const owl = new MockOwl();
 
-    const worker = owl.createWorker(async (job) => {
+    const worker = await owl.createWorker(async (job) => {
       const [enqueueTime, originalPayload] = job.payload.split(";");
       $.next({
         ...job,

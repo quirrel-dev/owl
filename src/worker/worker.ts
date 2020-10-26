@@ -54,7 +54,7 @@ export class Worker implements Closable {
   private readonly eggTimer = new EggTimer(() => this.events.emit("next"));
   private queueIsKnownToBeEmpty = false;
 
-  constructor(
+  private constructor(
     redisFactory: () => Redis,
     private readonly scheduleMap: ScheduleMap<string>,
     private readonly processor: Processor,
@@ -63,7 +63,29 @@ export class Worker implements Closable {
   ) {
     this.redis = redisFactory();
     this.redisSub = redisFactory();
+  }
 
+  static async create(
+    redisFactory: () => Redis,
+    scheduleMap: ScheduleMap<string>,
+    processor: Processor,
+    onError?: OnError,
+    maximumConcurrency = 100
+  ) {
+    const worker = new Worker(
+      redisFactory,
+      scheduleMap,
+      processor,
+      onError,
+      maximumConcurrency
+    );
+
+    await worker.init();
+
+    return worker;
+  }
+
+  private async init() {
     this.redis.defineCommand("request", {
       lua: fs.readFileSync(path.join(__dirname, "request.lua")).toString(),
       numberOfKeys: 2,
@@ -74,18 +96,18 @@ export class Worker implements Closable {
       numberOfKeys: 4,
     });
 
-    this.events.on("next", () => this.requestNextJobs());
+    this.events.on("next", (d) => this.requestNextJobs(d));
 
     this.redisSub.on("message", (channel: string) => {
       if (channel === "scheduled") {
         debug("pub/sub: received 'scheduled'");
         this.queueIsKnownToBeEmpty = false;
-        this.events.emit("next");
+        this.events.emit("next", "sub");
       }
     });
-    this.redisSub.subscribe("scheduled");
+    await this.redisSub.subscribe("scheduled");
 
-    this.events.emit("next");
+    this.events.emit("next", "init");
   }
 
   private isMaxedOut() {
@@ -113,8 +135,8 @@ export class Worker implements Closable {
     return +result;
   }
 
-  private async requestNextJobs() {
-    debug("requestNextJobs() called");
+  private async requestNextJobs(origin: string = "") {
+    debug("requestNextJobs() called", origin);
     if (this.isMaxedOut()) {
       debug("requestNextJobs(): skipped (worker is maxed out)");
       return;
@@ -152,6 +174,7 @@ export class Worker implements Closable {
           id,
           payload,
         });
+        debug(`requestNextJobs(): job #${id} - finished working`);
       } catch (error) {
         debug(`requestNextJobs(): job #${id} - failed`);
 
@@ -179,9 +202,13 @@ export class Worker implements Closable {
           queue,
           nextExecDate
         );
-        debug(
-          `requestNextJobs(): job #${id} - acknowledged (next execution: ${nextExecDate})`
-        );
+        if (nextExecDate) {
+          debug(
+            `requestNextJobs(): job #${id} - acknowledged (next execution: ${nextExecDate})`
+          );
+        } else {
+          debug(`requestNextJobs(): job #${id} - acknowledged`);
+        }
       }
     })();
 
