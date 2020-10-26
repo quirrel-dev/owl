@@ -49,6 +49,7 @@ test(
           (v) =>
             v.id.startsWith("x-") &&
             typeof v.payload === "string" &&
+            new Date(v.runAt) instanceof Date &&
             isFinite(+v.payload) &&
             v.queue === "any"
         ),

@@ -22,6 +22,7 @@ declare module "ioredis" {
           queue: string,
           id: string,
           payload: string,
+          runAt: string,
           schedule_type: string,
           schedule_meta: string
         ]
@@ -166,13 +167,22 @@ export class Worker implements Closable {
     }
 
     const currentlyProcessing = (async () => {
-      const [queue, id, payload, schedule_type, schedule_meta] = result;
+      const [
+        queue,
+        id,
+        payload,
+        runAtTimestamp,
+        schedule_type,
+        schedule_meta,
+      ] = result;
+      const runAt = new Date(+runAtTimestamp);
       try {
         debug(`requestNextJobs(): job #${id} - started working`);
         await this.processor({
           queue,
           id,
           payload,
+          runAt,
         });
         debug(`requestNextJobs(): job #${id} - finished working`);
       } catch (error) {
@@ -187,7 +197,7 @@ export class Worker implements Closable {
 
         await pipeline.exec();
 
-        this.onError?.({ queue, id, payload }, error);
+        this.onError?.({ queue, id, payload, runAt }, error);
       } finally {
         const nextExecDate = this.getNextExecutionDate(
           schedule_type,

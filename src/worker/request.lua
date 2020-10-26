@@ -17,6 +17,7 @@
       - queue
       - id
       - payload
+      - runAt
       - schedule type (if exists)
       - schedule meta (if exists)
 ]]
@@ -52,4 +53,4 @@ redis.call("PUBLISH", queue, "requested" .. ":" .. id)
 -- publishes "<queue>:<id>" to "requested"
 redis.call("PUBLISH", "requested", queue .. ":" .. id)
 
-return { queue, id, payload, schedule_type, schedule_meta }
+return { queue, id, payload, score, schedule_type, schedule_meta }
