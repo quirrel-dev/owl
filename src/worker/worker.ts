@@ -5,6 +5,10 @@ import { Job } from "../Job";
 import * as fs from "fs";
 import * as path from "path";
 import type { ScheduleMap } from "../index";
+import createDebug from "debug";
+import { EggTimer } from "./egg-timer";
+
+const debug = createDebug("owl:worker");
 
 declare module "ioredis" {
   interface Commands {
@@ -47,6 +51,9 @@ export class Worker implements Closable {
   private readonly redis;
   private readonly redisSub;
 
+  private readonly eggTimer = new EggTimer(() => this.events.emit("next"));
+  private queueIsKnownToBeEmpty = false;
+
   constructor(
     redisFactory: () => Redis,
     private readonly scheduleMap: ScheduleMap<string>,
@@ -71,6 +78,8 @@ export class Worker implements Closable {
 
     this.redisSub.on("message", (channel: string) => {
       if (channel === "scheduled") {
+        debug("pub/sub: received 'scheduled'");
+        this.queueIsKnownToBeEmpty = false;
         this.events.emit("next");
       }
     });
@@ -105,7 +114,13 @@ export class Worker implements Closable {
   }
 
   private async requestNextJobs() {
-    if (this.isMaxedOut() || this.closing) {
+    debug("requestNextJobs() called");
+    if (this.isMaxedOut()) {
+      debug("requestNextJobs(): skipped (worker is maxed out)");
+      return;
+    }
+    if (this.closing) {
+      debug("requestNextJobs(): skipped (worker is closing)");
       return;
     }
 
@@ -115,12 +130,16 @@ export class Worker implements Closable {
       "jobs",
       Date.now()
     );
+
     if (!result) {
+      debug("requestNextJobs(): skipped (queue is empty)");
+      this.queueIsKnownToBeEmpty = true;
       return;
     }
 
     if (typeof result === "number") {
-      setTimeout(() => this.events.emit("next"), Date.now() - result);
+      debug("requestNextJobs(): skipped (next job due at %o)", result);
+      this.eggTimer.setTimer(result);
       return;
     }
 
@@ -161,11 +180,16 @@ export class Worker implements Closable {
     })();
 
     this.currentlyProcessingJobs.add(currentlyProcessing);
-    this.events.emit("next");
+    if (!this.queueIsKnownToBeEmpty) {
+      this.events.emit("next");
+    }
 
     await currentlyProcessing;
     this.currentlyProcessingJobs.delete(currentlyProcessing);
-    this.events.emit("next");
+
+    if (!this.queueIsKnownToBeEmpty) {
+      this.events.emit("next");
+    }
   }
 
   public async close() {

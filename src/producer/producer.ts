@@ -3,6 +3,9 @@ import { Closable } from "../Closable";
 import { JobEnqueue } from "../Job";
 import * as fs from "fs";
 import * as path from "path";
+import createDebug from "debug";
+
+const debug = createDebug("owl:producer");
 
 declare module "ioredis" {
   interface Commands {
@@ -22,8 +25,8 @@ declare module "ioredis" {
 }
 
 export class Producer<ScheduleType extends string> implements Closable {
-  private readonly redis
-  constructor(private readonly redisFactory: () => Redis) {
+  private readonly redis;
+  constructor(redisFactory: () => Redis) {
     this.redis = redisFactory();
 
     this.redis.defineCommand("schedule", {
@@ -33,6 +36,7 @@ export class Producer<ScheduleType extends string> implements Closable {
   }
 
   public async enqueue(job: JobEnqueue<ScheduleType>) {
+    debug("job #%o: enqueueing", job.id);
     await this.redis.schedule(
       `jobs:${job.queue}:${job.id}`,
       `queues:${job.queue}`,
@@ -45,6 +49,7 @@ export class Producer<ScheduleType extends string> implements Closable {
       job.schedule?.meta,
       job.upsert ?? false
     );
+    debug("job #%o: enqueued", job.id);
   }
 
   async close() {
