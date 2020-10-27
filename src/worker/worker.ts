@@ -55,7 +55,7 @@ export class Worker implements Closable {
   private readonly eggTimer = new EggTimer(() => this.events.emit("next"));
   private queueIsKnownToBeEmpty = false;
 
-  private constructor(
+  constructor(
     redisFactory: () => Redis,
     private readonly scheduleMap: ScheduleMap<string>,
     private readonly processor: Processor,
@@ -64,29 +64,7 @@ export class Worker implements Closable {
   ) {
     this.redis = redisFactory();
     this.redisSub = redisFactory();
-  }
 
-  static async create(
-    redisFactory: () => Redis,
-    scheduleMap: ScheduleMap<string>,
-    processor: Processor,
-    onError?: OnError,
-    maximumConcurrency = 100
-  ) {
-    const worker = new Worker(
-      redisFactory,
-      scheduleMap,
-      processor,
-      onError,
-      maximumConcurrency
-    );
-
-    await worker.init();
-
-    return worker;
-  }
-
-  private async init() {
     this.redis.defineCommand("request", {
       lua: fs.readFileSync(path.join(__dirname, "request.lua")).toString(),
       numberOfKeys: 2,
@@ -106,9 +84,10 @@ export class Worker implements Closable {
         this.events.emit("next", "sub");
       }
     });
-    await this.redisSub.subscribe("scheduled");
 
-    this.events.emit("next", "init");
+    this.redisSub.subscribe("scheduled").then(() => {
+      this.events.emit("next", "init");
+    });
   }
 
   private isMaxedOut() {
