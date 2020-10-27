@@ -1,5 +1,5 @@
-import { expect } from "chai"
-import { EggTimer } from "../../src/worker/egg-timer"
+import { expect } from "chai";
+import { EggTimer } from "../../src/worker/egg-timer";
 
 describe("EggTimer", () => {
   describe("when set multiple times", () => {
@@ -11,11 +11,11 @@ describe("EggTimer", () => {
 
         expect(endTime - startTime).to.be.closeTo(50, 10);
         done();
-      })
+      });
 
       eggTimer.setTimer(Date.now() + 100);
       eggTimer.setTimer(Date.now() + 200);
       eggTimer.setTimer(Date.now() + 50);
-    })
-  })
-})
+    });
+  });
+});

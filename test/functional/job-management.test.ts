@@ -1,16 +1,29 @@
 import { expect } from "chai";
 import Owl from "../../src";
-import Redis from "ioredis";
+import IORedis, { Redis } from "ioredis";
+import { Producer } from "../../src/producer/producer";
 
 describe("job management", () => {
+  let redis: Redis;
+  let owl: Owl<string>;
+  let producer: Producer<string>;
+
+  beforeEach(async () => {
+    redis = new IORedis();
+    await redis.flushall();
+
+    owl = new Owl(() => new IORedis());
+
+    producer = owl.createProducer();
+  });
+
+  afterEach(async () => {
+    await redis.quit();
+    await producer.close();
+  });
+
   describe("Producer#scanQueue", () => {
     it("returns pending jobs", async () => {
-      const redis = new Redis();
-      await redis.flushall();
-      const owl = new Owl(() => new Redis());
-
-      const producer = owl.createProducer();
-
       await producer.enqueue({
         queue: "producer-scan-queue",
         id: "a",
@@ -48,20 +61,11 @@ describe("job management", () => {
       ]);
 
       expect(newCursor).to.eq(0);
-
-      await producer.close();
-      await redis.quit();
     });
   });
 
   describe("Producer#findById", () => {
     it("returns the right job", async () => {
-      const redis = new Redis();
-      await redis.flushall();
-      const owl = new Owl(() => new Redis());
-
-      const producer = owl.createProducer();
-
       await producer.enqueue({
         queue: "producer-find-by-id",
         id: "my-random-id",
@@ -81,40 +85,22 @@ describe("job management", () => {
         runAt: new Date("2020-10-27T07:36:56.321Z"),
         schedule: undefined,
       });
-
-      await producer.close();
-      await redis.quit();
     });
 
     describe("when giving non-existing ID", () => {
       it("returns null", async () => {
-        const redis = new Redis();
-        await redis.flushall();
-        const owl = new Owl(() => new Redis());
-
-        const producer = owl.createProducer();
-
         const job = await producer.findById(
           "producer-find-by-id",
           "my-random-id"
         );
 
         expect(job).to.be.null;
-
-        await producer.close();
-        await redis.quit();
       });
     });
   });
 
   describe("Producer#invoke", () => {
     it("moves job to be executed immediately", async () => {
-      const redis = new Redis();
-      await redis.flushall();
-      const owl = new Owl(() => new Redis());
-
-      const producer = owl.createProducer();
-
       await producer.enqueue({
         queue: "producer-invoke",
         id: "a",
@@ -129,33 +115,21 @@ describe("job management", () => {
 
       const invokedJob = await producer.findById("producer-invoke", "a");
       expect(+invokedJob.runAt).to.be.eq(0);
-
-      await producer.close();
-      await redis.quit();
     });
   });
 
   describe("Producer#delete", () => {
     it("deletes pending job", async () => {
-      const redis = new Redis();
-      await redis.flushall();
-      const owl = new Owl(() => new Redis());
-
-      const producer = owl.createProducer();
-
       await producer.enqueue({
         queue: "producer-delete",
         id: "a",
-        payload: "a"
+        payload: "a",
       });
 
-      await producer.delete("producer-delete", "a")
+      await producer.delete("producer-delete", "a");
 
       const job = await producer.findById("producer-delete", "a");
       expect(job).to.be.null;
-
-      await producer.close();
-      await redis.quit();
     });
   });
 });
