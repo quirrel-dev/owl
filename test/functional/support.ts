@@ -29,7 +29,7 @@ export function makeProducerEnv(inMemory = false) {
       env.redis = new IORedis(process.env.REDIS_URL);
       await env.redis.flushall();
 
-      env.owl = new Owl(() => new IORedis(), scheduleMap);
+      env.owl = new Owl(() => new IORedis(process.env.REDIS_URL), scheduleMap);
     }
 
     env.producer = env.owl.createProducer();
