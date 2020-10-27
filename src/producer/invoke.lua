@@ -17,6 +17,13 @@ if redis.call("EXISTS", KEYS[1]) == 0 then
   return 1
 end
 
-redis.call("ZADD", KEYS[2], "XX", "LT", 0, ARGV[2] .. ":" .. ARGV[1])
+redis.call("ZADD", KEYS[2], 0, ARGV[2] .. ":" .. ARGV[1])
+
+-- publishes "scheduled" to "<queue>:<id>"
+redis.call("PUBLISH", ARGV[2] .. ":" .. ARGV[1], "scheduled")
+-- publishes "scheduled:<id>" to "<queue>"
+redis.call("PUBLISH", ARGV[2], "scheduled" .. ":" .. ARGV[1])
+-- publishes "<queue>:<id>" to "scheduled"
+redis.call("PUBLISH", "scheduled", ARGV[2] .. ":" .. ARGV[1])
 
 return 0

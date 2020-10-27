@@ -48,6 +48,16 @@ export class Producer<ScheduleType extends string> implements Closable {
       lua: fs.readFileSync(path.join(__dirname, "schedule.lua")).toString(),
       numberOfKeys: 3,
     });
+
+    this.redis.defineCommand("invoke", {
+      lua: fs.readFileSync(path.join(__dirname, "invoke.lua")).toString(),
+      numberOfKeys: 2,
+    });
+
+    this.redis.defineCommand("delete", {
+      lua: fs.readFileSync(path.join(__dirname, "delete.lua")).toString(),
+      numberOfKeys: 3,
+    });
   }
 
   public async enqueue(job: JobEnqueue<ScheduleType>) {
@@ -78,14 +88,16 @@ export class Producer<ScheduleType extends string> implements Closable {
 
     return {
       newCursor: +newCursor,
-      jobs: await this.findJobs(queue, jobIds),
+      jobs: (await this.findJobs(queue, jobIds)).filter((j) => !!j) as Job<
+        ScheduleType
+      >[],
     };
   }
 
   private async findJobs(
     queue: string,
     ids: string[]
-  ): Promise<Job<ScheduleType>[]> {
+  ): Promise<(Job<ScheduleType> | null)[]> {
     const pipeline = this.redis.pipeline();
 
     for (const id of ids) {
@@ -93,7 +105,7 @@ export class Producer<ScheduleType extends string> implements Closable {
       pipeline.zscore("queue", `${queue}:${id}`);
     }
 
-    const jobResults: Job<ScheduleType>[] = [];
+    const jobResults: (Job<ScheduleType> | null)[] = [];
 
     const redisResults = await pipeline.exec();
     for (let i = 0; i < redisResults.length; i += 2) {
@@ -110,6 +122,12 @@ export class Producer<ScheduleType extends string> implements Closable {
       }
 
       const { payload, schedule_type, schedule_meta } = hgetallResult;
+
+      if (typeof payload === "undefined") {
+        jobResults.push(null);
+        continue;
+      }
+
       const runAt = +zscoreResult;
 
       jobResults.push({
