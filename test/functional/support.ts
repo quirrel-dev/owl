@@ -26,7 +26,7 @@ export function makeProducerEnv(inMemory = false) {
     if (inMemory) {
       env.owl = new MockOwl(scheduleMap);
     } else {
-      env.redis = new IORedis();
+      env.redis = new IORedis(process.env.REDIS_URL);
       await env.redis.flushall();
 
       env.owl = new Owl(() => new IORedis(), scheduleMap);
