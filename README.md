@@ -8,7 +8,7 @@ It's a queueing library built around the following requirements:
 - [x] delayed & repeated scheduling at totally custom schedules
 - [x] written in TypeScript
 - [x] has an activity log
-- [ ] supports fast queries on scheduled jobs
+- [x] supports fast queries on scheduled jobs
 - [x] supports both idempotency / override characteristics
 - [x] can manage *a lot* of queues
 - [x] queues don't need to be specified beforehand
