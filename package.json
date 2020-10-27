@@ -4,9 +4,7 @@
   "description": "A high-throughput, TypeScript-native task scheduling library that runs both on Redis and with an in-memory-mock.",
   "main": "dist/index.js",
   "scripts": {
-    "test": "node test/test.js",
-    "test:inmemory": "node test/test.js inmemory",
-    "test:redis": "node test/test.js redis",
+    "test": "mocha",
     "build": "tsc && node copy-lua.js",
     "prepack": "npm run build"
   },
