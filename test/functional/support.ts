@@ -1,10 +1,10 @@
-import Owl from "../../src";
+import Owl, { MockOwl } from "../../src";
 import IORedis, { Redis } from "ioredis";
 import { Producer } from "../../src/producer/producer";
 import { Worker } from "../../src/worker/worker";
 import { Job } from "../../src/Job";
 
-export function makeProducerEnv() {
+export function makeProducerEnv(inMemory = false) {
   const env: {
     redis: Redis;
     owl: Owl<"every">;
@@ -20,26 +20,31 @@ export function makeProducerEnv() {
   };
 
   async function setup() {
-    env.redis = new IORedis();
-    await env.redis.flushall();
-
-    env.owl = new Owl(() => new IORedis(), {
+    const scheduleMap = {
       every: (lastDate, meta) => new Date(+lastDate + +meta),
-    });
+    };
+    if (inMemory) {
+      env.owl = new MockOwl(scheduleMap);
+    } else {
+      env.redis = new IORedis();
+      await env.redis.flushall();
+
+      env.owl = new Owl(() => new IORedis(), scheduleMap);
+    }
 
     env.producer = env.owl.createProducer();
   }
 
   async function teardown() {
-    await env.redis.quit();
+    await env.redis?.quit();
     await env.producer.close();
   }
 
   return env;
 }
 
-export function makeWorkerEnv() {
-  const producerEnv = makeProducerEnv();
+export function makeWorkerEnv(inMemory = false) {
+  const producerEnv = makeProducerEnv(inMemory);
 
   const producerSetup = producerEnv.setup;
   const producerTeardown = producerEnv.teardown;
