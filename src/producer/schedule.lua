@@ -12,25 +12,21 @@
     ARGV[4] scheduled execution date
     ARGV[5] schedule_type
     ARGV[6] schedule_meta
-    ARGV[7] use upsert semantics
+    ARGV[7] maximum execution times
+    ARGV[8] use upsert semantics
 
   Output:
     0 if everything went fine
     1 if upsert semantics weren't used and there was another job with this id
 ]]
 
-if ARGV[7] == "false" then  
+if ARGV[8] == "false" then  
   if redis.call("EXISTS", KEYS[1]) == 1 then
     return 1
   end
 end
 
--- adds job data to table
-if not ARGV[5] then
-  redis.call("HSET", KEYS[1], "payload", ARGV[3])
-else
-  redis.call("HSET", KEYS[1], "payload", ARGV[3], "schedule_type", ARGV[5], "schedule_meta", ARGV[6])
-end
+redis.call("HSET", KEYS[1], "payload", ARGV[3], "schedule_type", ARGV[5], "schedule_meta", ARGV[6], "max_times", ARGV[7], "count", 1)
 
 redis.call("SADD", KEYS[2], ARGV[1])
 

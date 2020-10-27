@@ -22,8 +22,11 @@ declare module "ioredis" {
           queue: string,
           id: string,
           payload: string,
+          runAt: string,
           schedule_type: string,
-          schedule_meta: string
+          schedule_meta: string,
+          count: string,
+          max_times: string
         ]
       | null
       | number
@@ -54,7 +57,7 @@ export class Worker implements Closable {
   private readonly eggTimer = new EggTimer(() => this.events.emit("next"));
   private queueIsKnownToBeEmpty = false;
 
-  private constructor(
+  constructor(
     redisFactory: () => Redis,
     private readonly scheduleMap: ScheduleMap<string>,
     private readonly processor: Processor,
@@ -63,29 +66,7 @@ export class Worker implements Closable {
   ) {
     this.redis = redisFactory();
     this.redisSub = redisFactory();
-  }
 
-  static async create(
-    redisFactory: () => Redis,
-    scheduleMap: ScheduleMap<string>,
-    processor: Processor,
-    onError?: OnError,
-    maximumConcurrency = 100
-  ) {
-    const worker = new Worker(
-      redisFactory,
-      scheduleMap,
-      processor,
-      onError,
-      maximumConcurrency
-    );
-
-    await worker.init();
-
-    return worker;
-  }
-
-  private async init() {
     this.redis.defineCommand("request", {
       lua: fs.readFileSync(path.join(__dirname, "request.lua")).toString(),
       numberOfKeys: 2,
@@ -105,9 +86,10 @@ export class Worker implements Closable {
         this.events.emit("next", "sub");
       }
     });
-    await this.redisSub.subscribe("scheduled");
 
-    this.events.emit("next", "init");
+    this.redisSub.subscribe("scheduled").then(() => {
+      this.events.emit("next", "init");
+    });
   }
 
   private isMaxedOut() {
@@ -166,13 +148,26 @@ export class Worker implements Closable {
     }
 
     const currentlyProcessing = (async () => {
-      const [queue, id, payload, schedule_type, schedule_meta] = result;
+      const [
+        queue,
+        id,
+        payload,
+        runAtTimestamp,
+        schedule_type,
+        schedule_meta,
+        count,
+        max_times,
+      ] = result;
+      const runAt = new Date(+runAtTimestamp);
       try {
         debug(`requestNextJobs(): job #${id} - started working`);
         await this.processor({
           queue,
           id,
           payload,
+          runAt,
+          count: +count,
+          times: max_times ? +max_times : undefined,
         });
         debug(`requestNextJobs(): job #${id} - finished working`);
       } catch (error) {
@@ -187,12 +182,27 @@ export class Worker implements Closable {
 
         await pipeline.exec();
 
-        this.onError?.({ queue, id, payload }, error);
-      } finally {
-        const nextExecDate = this.getNextExecutionDate(
-          schedule_type,
-          schedule_meta
+        this.onError?.(
+          {
+            queue,
+            id,
+            payload,
+            runAt,
+            count: +count,
+            times: max_times ? +max_times : undefined,
+          },
+          error
         );
+      } finally {
+        let nextExecDate: number | undefined = undefined;
+
+        if (max_times === "" || +count < +max_times) {
+          nextExecDate = this.getNextExecutionDate(
+            schedule_type,
+            schedule_meta
+          );
+        }
+
         await this.redis.acknowledge(
           `jobs:${queue}:${id}`,
           `queues:${queue}`,

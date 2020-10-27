@@ -8,6 +8,6 @@ export class EggTimer {
       clearTimeout(this.currentTimer);
     }
 
-    setTimeout(this.functionToCall, timestamp - Date.now());
+    this.currentTimer = setTimeout(this.functionToCall, timestamp - Date.now());
   }
 }

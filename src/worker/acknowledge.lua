@@ -28,6 +28,8 @@ if ARGV[3] == '' then
   redis.call("SREM", KEYS[2], ARGV[1])
 else
   redis.call("ZADD", KEYS[4], ARGV[3], ARGV[2] .. ":" .. ARGV[1])
+
+  redis.call("HINCRBY", KEYS[1], "count", 1)
   
   -- publishes "scheduled" to "<queue>:<id>"
   redis.call("PUBLISH", ARGV[2] .. ":" .. ARGV[1], "scheduled")
