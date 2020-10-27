@@ -110,7 +110,7 @@ export class Producer<ScheduleType extends string> implements Closable {
       }
 
       const { payload, schedule_type, schedule_meta } = hgetallResult;
-      const runAt = zscoreResult;
+      const runAt = +zscoreResult;
 
       jobResults.push({
         id: jobId,
