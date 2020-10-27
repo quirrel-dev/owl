@@ -1,6 +1,7 @@
 import Owl, { MockOwl } from "../../src";
 import IORedis, { Redis } from "ioredis";
 import { Producer } from "../../src/producer/producer";
+import { Activity } from "../../src/activity/activity";
 import { Worker } from "../../src/worker/worker";
 import { Job } from "../../src/Job";
 
@@ -73,4 +74,34 @@ export function makeWorkerEnv(inMemory = false) {
   };
 
   return workerEnv;
+}
+
+export function makeActivityEnv(inMemory = false) {
+  const workerEnv = makeWorkerEnv(inMemory);
+
+  const workerSetup = workerEnv.setup;
+  const workerTeardown = workerEnv.teardown;
+
+  const activityEnv: typeof workerEnv & {
+    activity: Activity<"every">;
+    events: [string, Job][];
+  } = workerEnv as any;
+
+  activityEnv.activity = null as any;
+  activityEnv.events = [];
+
+  activityEnv.setup = async function setup() {
+    await workerSetup();
+
+    activityEnv.activity = workerEnv.owl.createActivity({}, (event, job) => {
+      activityEnv.events.push([event, job]);
+    });
+  };
+
+  activityEnv.teardown = async function teardown() {
+    await workerTeardown();
+    await activityEnv.activity.close();
+  };
+
+  return activityEnv;
 }

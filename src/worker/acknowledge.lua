@@ -18,8 +18,6 @@ redis.call("SREM", KEYS[3], ARGV[2] .. ":" .. ARGV[1])
 
 -- publishes "acknowledged" to "<queue>:<id>"
 redis.call("PUBLISH", ARGV[2] .. ":" .. ARGV[1], "acknowledged")
--- publishes "acknowledged:<id>" to "<queue>"
-redis.call("PUBLISH", ARGV[2], "acknowledged" .. ":" .. ARGV[1])
 -- publishes "<queue>:<id>" to "acknowledged"
 redis.call("PUBLISH", "acknowledged", ARGV[2] .. ":" .. ARGV[1])
 
@@ -33,8 +31,6 @@ else
   
   -- publishes "scheduled" to "<queue>:<id>"
   redis.call("PUBLISH", ARGV[2] .. ":" .. ARGV[1], "scheduled")
-  -- publishes "scheduled:<id>" to "<queue>"
-  redis.call("PUBLISH", ARGV[2], "scheduled" .. ":" .. ARGV[1])
   -- publishes "<queue>:<id>" to "scheduled"
   redis.call("PUBLISH", "scheduled", ARGV[2] .. ":" .. ARGV[1])
 end

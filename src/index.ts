@@ -2,6 +2,7 @@ import { Redis } from "ioredis";
 import { Producer } from "./producer/producer";
 import { OnError, Processor, Worker } from "./worker/worker";
 import RedisMock from "ioredis-mock";
+import { Activity, OnActivity, SubscriptionOptions } from "./activity/activity";
 
 export type ScheduleMap<ScheduleType extends string> = Record<
   ScheduleType,
@@ -20,6 +21,13 @@ export default class Owl<ScheduleType extends string> {
 
   public createProducer() {
     return new Producer<ScheduleType>(this.redisFactory);
+  }
+
+  public createActivity(
+    options: SubscriptionOptions,
+    onEvent: OnActivity<ScheduleType>
+  ) {
+    return new Activity<ScheduleType>(this.redisFactory, onEvent, options);
   }
 }
 

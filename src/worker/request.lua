@@ -52,8 +52,6 @@ local max_times = jobData[5]
 
 -- publishes "requested" to "<queue>:<id>"
 redis.call("PUBLISH", queue .. ":" .. id, "requested")
--- publishes "requested:<id>" to "<queue>"
-redis.call("PUBLISH", queue, "requested" .. ":" .. id)
 -- publishes "<queue>:<id>" to "requested"
 redis.call("PUBLISH", "requested", queue .. ":" .. id)
 

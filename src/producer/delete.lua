@@ -21,4 +21,9 @@ end
 redis.call("SREM", KEYS[2], ARGV[1])
 redis.call("ZREM", KEYS[3], ARGV[2] .. ":" .. ARGV[1])
 
+-- publishes "deleted" to "<queue>:<id>"
+redis.call("PUBLISH", ARGV[2] .. ":" .. ARGV[1], "deleted")
+-- publishes "<queue>:<id>" to "deleted"
+redis.call("PUBLISH", "deleted", ARGV[2] .. ":" .. ARGV[1])
+
 return 0
