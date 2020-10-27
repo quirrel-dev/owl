@@ -24,7 +24,9 @@ declare module "ioredis" {
           payload: string,
           runAt: string,
           schedule_type: string,
-          schedule_meta: string
+          schedule_meta: string,
+          count: string,
+          max_times: string
         ]
       | null
       | number
@@ -153,6 +155,8 @@ export class Worker implements Closable {
         runAtTimestamp,
         schedule_type,
         schedule_meta,
+        count,
+        max_times,
       ] = result;
       const runAt = new Date(+runAtTimestamp);
       try {
@@ -162,6 +166,8 @@ export class Worker implements Closable {
           id,
           payload,
           runAt,
+          count: +count,
+          times: max_times ? +max_times : undefined,
         });
         debug(`requestNextJobs(): job #${id} - finished working`);
       } catch (error) {
@@ -176,12 +182,27 @@ export class Worker implements Closable {
 
         await pipeline.exec();
 
-        this.onError?.({ queue, id, payload, runAt }, error);
-      } finally {
-        const nextExecDate = this.getNextExecutionDate(
-          schedule_type,
-          schedule_meta
+        this.onError?.(
+          {
+            queue,
+            id,
+            payload,
+            runAt,
+            count: +count,
+            times: max_times ? +max_times : undefined,
+          },
+          error
         );
+      } finally {
+        let nextExecDate: number | undefined = undefined;
+
+        if (max_times === "" || +count < +max_times) {
+          nextExecDate = this.getNextExecutionDate(
+            schedule_type,
+            schedule_meta
+          );
+        }
+
         await this.redis.acknowledge(
           `jobs:${queue}:${id}`,
           `queues:${queue}`,

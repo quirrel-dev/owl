@@ -1,44 +1,29 @@
 import { expect } from "chai";
-import Owl from "../../src";
-import IORedis, { Redis } from "ioredis";
-import { Producer } from "../../src/producer/producer";
+import { makeProducerEnv } from "./support";
 
 describe("job management", () => {
-  let redis: Redis;
-  let owl: Owl<string>;
-  let producer: Producer<string>;
+  const env = makeProducerEnv();
+  beforeEach(env.setup);
 
-  beforeEach(async () => {
-    redis = new IORedis();
-    await redis.flushall();
-
-    owl = new Owl(() => new IORedis());
-
-    producer = owl.createProducer();
-  });
-
-  afterEach(async () => {
-    await redis.quit();
-    await producer.close();
-  });
+  afterEach(env.teardown);
 
   describe("Producer#scanQueue", () => {
     it("returns pending jobs", async () => {
-      await producer.enqueue({
+      await env.producer.enqueue({
         queue: "producer-scan-queue",
         id: "a",
         payload: "a",
         runAt: new Date("2020-10-27T07:36:56.321Z"),
       });
 
-      await producer.enqueue({
+      await env.producer.enqueue({
         queue: "producer-scan-queue",
         id: "b",
         payload: "b",
         runAt: new Date("2020-10-27T07:36:56.321Z"),
       });
 
-      const { jobs, newCursor } = await producer.scanQueue(
+      const { jobs, newCursor } = await env.producer.scanQueue(
         "producer-scan-queue",
         0
       );
@@ -50,6 +35,8 @@ describe("job management", () => {
           payload: "b",
           runAt: new Date("2020-10-27T07:36:56.321Z"),
           schedule: undefined,
+          count: 1,
+          times: undefined,
         },
         {
           queue: "producer-scan-queue",
@@ -57,6 +44,8 @@ describe("job management", () => {
           payload: "a",
           runAt: new Date("2020-10-27T07:36:56.321Z"),
           schedule: undefined,
+          count: 1,
+          times: undefined,
         },
       ]);
 
@@ -66,14 +55,14 @@ describe("job management", () => {
 
   describe("Producer#findById", () => {
     it("returns the right job", async () => {
-      await producer.enqueue({
+      await env.producer.enqueue({
         queue: "producer-find-by-id",
         id: "my-random-id",
         payload: "lol",
         runAt: new Date("2020-10-27T07:36:56.321Z"),
       });
 
-      const job = await producer.findById(
+      const job = await env.producer.findById(
         "producer-find-by-id",
         "my-random-id"
       );
@@ -84,12 +73,14 @@ describe("job management", () => {
         payload: "lol",
         runAt: new Date("2020-10-27T07:36:56.321Z"),
         schedule: undefined,
+        count: 1,
+        times: undefined,
       });
     });
 
     describe("when giving non-existing ID", () => {
       it("returns null", async () => {
-        const job = await producer.findById(
+        const job = await env.producer.findById(
           "producer-find-by-id",
           "my-random-id"
         );
@@ -101,34 +92,34 @@ describe("job management", () => {
 
   describe("Producer#invoke", () => {
     it("moves job to be executed immediately", async () => {
-      await producer.enqueue({
+      await env.producer.enqueue({
         queue: "producer-invoke",
         id: "a",
         payload: "a",
         runAt: new Date("1970-10-27T07:36:56.321Z"),
       });
 
-      const job = await producer.findById("producer-invoke", "a");
+      const job = await env.producer.findById("producer-invoke", "a");
       expect(+job.runAt).to.equal(+new Date("1970-10-27T07:36:56.321Z"));
 
-      await producer.invoke("producer-invoke", "a");
+      await env.producer.invoke("producer-invoke", "a");
 
-      const invokedJob = await producer.findById("producer-invoke", "a");
+      const invokedJob = await env.producer.findById("producer-invoke", "a");
       expect(+invokedJob.runAt).to.be.eq(0);
     });
   });
 
   describe("Producer#delete", () => {
     it("deletes pending job", async () => {
-      await producer.enqueue({
+      await env.producer.enqueue({
         queue: "producer-delete",
         id: "a",
         payload: "a",
       });
 
-      await producer.delete("producer-delete", "a");
+      await env.producer.delete("producer-delete", "a");
 
-      const job = await producer.findById("producer-delete", "a");
+      const job = await env.producer.findById("producer-delete", "a");
       expect(job).to.be.null;
     });
   });

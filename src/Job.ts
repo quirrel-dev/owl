@@ -8,6 +8,9 @@ export interface Job<ScheduleType extends string = string> {
     type: ScheduleType;
     meta: string;
   };
+
+  count: number;
+  times?: number;
 }
 
 export interface JobEnqueue<ScheduleType extends string = string> {

@@ -1,64 +1,49 @@
 import { expect } from "chai";
-import Owl from "../../src";
-import IORedis, { Redis } from "ioredis";
-import { Producer } from "../../src/producer/producer";
+import { makeProducerEnv } from "./support";
 
 describe("Idempotency", () => {
-  let redis: Redis;
-  let owl: Owl<string>;
-  let producer: Producer<string>;
+  const env = makeProducerEnv();
 
-  beforeEach(async () => {
-    redis = new IORedis();
-    await redis.flushall();
-
-    owl = new Owl(() => new IORedis());
-
-    producer = owl.createProducer();
-  });
-
-  afterEach(async () => {
-    await redis.quit();
-    await producer.close();
-  });
+  beforeEach(env.setup);
+  afterEach(env.teardown);
 
   describe("when enqueueing an already-existant ID", () => {
     describe("and upsert = true", () => {
       it("replaces existing job", async () => {
-        await producer.enqueue({
+        await env.producer.enqueue({
           queue: "upsert-true-queue",
           id: "a",
           payload: "1",
         });
 
-        await producer.enqueue({
+        await env.producer.enqueue({
           queue: "upsert-true-queue",
           id: "a",
           payload: "2",
           upsert: true,
         });
 
-        const job = await producer.findById("upsert-true-queue", "a");
+        const job = await env.producer.findById("upsert-true-queue", "a");
         expect(job.payload).to.equal("2");
       });
     });
 
     describe("and upsert = false", () => {
       it("is a no-op", async () => {
-        await producer.enqueue({
+        await env.producer.enqueue({
           queue: "upsert-false-queue",
           id: "a",
           payload: "1",
         });
 
-        await producer.enqueue({
+        await env.producer.enqueue({
           queue: "upsert-false-queue",
           id: "a",
           payload: "2",
           upsert: false,
         });
 
-        const job = await producer.findById("upsert-false-queue", "a");
+        const job = await env.producer.findById("upsert-false-queue", "a");
         expect(job.payload).to.equal("1");
       });
     });

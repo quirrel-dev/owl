@@ -1,48 +1,20 @@
 import { expect } from "chai";
-import Owl from "../../src";
-import IORedis, { Redis } from "ioredis";
-import { Producer } from "../../src/producer/producer";
-import { Worker } from "../../src/worker/worker";
-import { Job } from "../../src/Job";
+import { makeWorkerEnv } from "./support";
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 describe("Schedule", () => {
-  let redis: Redis;
-  let owl: Owl<"every">;
-  let producer: Producer<"every">;
-  let worker: Worker;
+  const env = makeWorkerEnv();
 
-  let jobs: [number, Job][] = [];
-
-  beforeEach(async () => {
-    redis = new IORedis();
-    await redis.flushall();
-
-    owl = new Owl(() => new IORedis(), {
-      every: (lastDate, meta) => new Date(+lastDate + +meta),
-    });
-
-    jobs = [];
-
-    producer = owl.createProducer();
-    worker = owl.createWorker(async (job) => {
-      jobs.push([Date.now(), job]);
-    });
-  });
-
-  afterEach(async () => {
-    await redis.quit();
-    await producer.close();
-    await worker.close();
-  });
+  beforeEach(env.setup);
+  afterEach(env.teardown);
 
   describe("every 10 msec", () => {
     describe("without 'times' limit", () => {
       it("executes until deleted", async () => {
-        await producer.enqueue({
+        await env.producer.enqueue({
           queue: "scheduled-eternity",
           id: "a",
           payload: "a",
@@ -54,23 +26,23 @@ describe("Schedule", () => {
 
         await delay(100);
 
-        expect(jobs.length).to.be.closeTo(7, 1);
+        expect(env.jobs.length).to.be.closeTo(7, 1);
 
-        const lengthBeforeDeletion = jobs.length;
+        const lengthBeforeDeletion = env.jobs.length;
 
-        await producer.delete("scheduled-eternity", "a");
+        await env.producer.delete("scheduled-eternity", "a");
 
         await delay(100);
 
-        const lengthAfterDeletion = jobs.length;
+        const lengthAfterDeletion = env.jobs.length;
 
-        expect(lengthAfterDeletion - lengthBeforeDeletion).to.be.closeTo(0, 1);
+        expect(lengthAfterDeletion - lengthBeforeDeletion).to.be.closeTo(0, 2);
       });
     });
 
     describe("with 'times' limit", () => {
       it("executes specified amount of times", async () => {
-        await producer.enqueue({
+        await env.producer.enqueue({
           queue: "scheduled-times",
           id: "a",
           payload: "a",
@@ -83,7 +55,7 @@ describe("Schedule", () => {
 
         await delay(100);
 
-        expect(jobs.length).to.equal(5);
+        expect(env.jobs.length).to.equal(5);
       });
     });
   });

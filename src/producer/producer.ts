@@ -19,6 +19,7 @@ declare module "ioredis" {
       executionDate: number,
       schedule_type: string | undefined,
       schedule_meta: string | undefined,
+      times: number | undefined,
       useUpsertSemantics: boolean
     ): Promise<0 | 1>;
 
@@ -72,6 +73,7 @@ export class Producer<ScheduleType extends string> implements Closable {
       job.runAt ? +job.runAt : 0,
       job.schedule?.type,
       job.schedule?.meta,
+      job.times,
       job.upsert ?? false
     );
     debug("job #%o: enqueued", job.id);
@@ -121,7 +123,7 @@ export class Producer<ScheduleType extends string> implements Closable {
         throw zscoreErr;
       }
 
-      const { payload, schedule_type, schedule_meta } = hgetallResult;
+      const { payload, schedule_type, schedule_meta, count, max_times } = hgetallResult;
 
       if (typeof payload === "undefined") {
         jobResults.push(null);
@@ -141,6 +143,8 @@ export class Producer<ScheduleType extends string> implements Closable {
               meta: schedule_meta,
             }
           : undefined,
+        count: +count,
+        times: max_times ? +max_times : undefined
       });
     }
 

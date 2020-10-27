@@ -20,6 +20,8 @@
       - runAt
       - schedule type (if exists)
       - schedule meta (if exists)
+      - count
+      - max times
 ]]
 
 local result = redis.call("ZRANGE", KEYS[1], 0, 0, "WITHSCORES")
@@ -40,11 +42,13 @@ redis.call("SADD", KEYS[2], queueAndId)
 redis.call("ZREM", KEYS[1], queueAndId)
 local queue, id = queueAndId:match("([^,]+):([^,]+)")
 
-local jobData = redis.call("HMGET", ARGV[1] .. ":" .. queueAndId, "payload", "schedule_type", "schedule_meta")
+local jobData = redis.call("HMGET", ARGV[1] .. ":" .. queueAndId, "payload", "schedule_type", "schedule_meta", "count", "max_times")
 
 local payload = jobData[1]
 local schedule_type = jobData[2]
 local schedule_meta = jobData[3]
+local count = jobData[4]
+local max_times = jobData[5]
 
 -- publishes "requested" to "<queue>:<id>"
 redis.call("PUBLISH", queue .. ":" .. id, "requested")
@@ -53,4 +57,4 @@ redis.call("PUBLISH", queue, "requested" .. ":" .. id)
 -- publishes "<queue>:<id>" to "requested"
 redis.call("PUBLISH", "requested", queue .. ":" .. id)
 
-return { queue, id, payload, score, schedule_type, schedule_meta }
+return { queue, id, payload, score, schedule_type, schedule_meta, count, max_times }
