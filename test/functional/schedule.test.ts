@@ -27,7 +27,11 @@ function test(backend: "Redis" | "In-Memory") {
 
           await delay(100);
 
-          expect(env.jobs.length).to.be.closeTo(7, 1);
+          expect(env.jobs.length).to.be.closeTo(10, 4);
+          expect(env.jobs.length).to.be.below(11);
+
+          expect(env.jobs.every(([, job], index) => job.count === index + 1)).to
+            .be.true;
 
           const lengthBeforeDeletion = env.jobs.length;
 
