@@ -6,12 +6,12 @@ import { Producer } from "../producer/producer";
 export type SubscriptionOptions = { queue?: string; id?: string };
 export type OnActivity<ScheduleType extends string> = (
   event: "scheduled" | "deleted" | "requested" | "acknowledged",
-  job: Job<ScheduleType> | null
+  job: Job<ScheduleType>
 ) => Promise<void> | void;
 
 export class Activity<ScheduleType extends string> implements Closable {
-  redis;
-  producer;
+  private redis;
+  private producer;
 
   constructor(
     redisFactory: () => Redis,

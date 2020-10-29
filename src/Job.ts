@@ -20,7 +20,10 @@ export interface JobEnqueue<ScheduleType extends string = string> {
 
   runAt?: Date;
 
-  upsert?: boolean;
+  /**
+   * Override if ID already exists
+   */
+  override?: boolean;
 
   /**
    * Optional: Scheduled data.

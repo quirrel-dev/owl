@@ -4,6 +4,9 @@ import { OnError, Processor, Worker } from "./worker/worker";
 import RedisMock from "ioredis-mock";
 import { Activity, OnActivity, SubscriptionOptions } from "./activity/activity";
 
+export { Job, JobEnqueue } from "./Job";
+export { Closable } from "./Closable";
+
 export type ScheduleMap<ScheduleType extends string> = Record<
   ScheduleType,
   (lastExecution: Date, scheduleMeta: string) => Date | null

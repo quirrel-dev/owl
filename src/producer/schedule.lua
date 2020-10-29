@@ -13,7 +13,7 @@
     ARGV[5] schedule_type
     ARGV[6] schedule_meta
     ARGV[7] maximum execution times
-    ARGV[8] use upsert semantics
+    ARGV[8] override if id already exists
 
   Output:
     0 if everything went fine
