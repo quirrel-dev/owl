@@ -4,6 +4,7 @@ declare module "*.lua" {
 }
 
 declare module "ioredis-mock" {
-  import Redis from "ioredis";
-  export = Redis;
+  import { Redis } from "ioredis";
+  class RedisMock extends Redis {}
+  export = RedisMock;
 }

@@ -1,12 +1,12 @@
 import { Redis } from "ioredis";
+import RedisMock from "ioredis-mock";
 import { Closable } from "../Closable";
-import { Job } from "../Job";
 import { Producer } from "../producer/producer";
 
 export type SubscriptionOptions = { queue?: string; id?: string };
-export type OnActivity<ScheduleType extends string> = (
+export type OnActivity = (
   event: "scheduled" | "deleted" | "requested" | "acknowledged",
-  job: Job<ScheduleType>
+  job: { id: string; queue: string }
 ) => Promise<void> | void;
 
 export class Activity<ScheduleType extends string> implements Closable {
@@ -15,15 +15,21 @@ export class Activity<ScheduleType extends string> implements Closable {
 
   constructor(
     redisFactory: () => Redis,
-    private readonly onEvent: OnActivity<ScheduleType>,
-    options: SubscriptionOptions
+    private readonly onEvent: OnActivity,
+    options: SubscriptionOptions = {}
   ) {
     this.redis = redisFactory();
     this.producer = new Producer<ScheduleType>(redisFactory);
 
-    this.redis.on("message", (channel, message) =>
-      this.handleMessage(channel, message)
-    );
+    if (this.redis instanceof RedisMock) {
+      this.redis.on("message", (channel, message) =>
+        this.handleMessage(channel, message)
+      );
+    } else {
+      this.redis.on("pmessage", (_pattern, channel, message) =>
+        this.handleMessage(channel, message)
+      );
+    }
 
     this.redis.psubscribe(`${options.queue ?? "*"}:${options.id ?? "*"}`);
   }
@@ -34,8 +40,7 @@ export class Activity<ScheduleType extends string> implements Closable {
   ) {
     const [queue, id] = channel.split(":");
 
-    const job = await this.producer.findById(queue, id);
-    await this.onEvent(message, job ?? ({ queue, id } as Job<ScheduleType>));
+    await this.onEvent(message, { id, queue });
   }
 
   async close() {

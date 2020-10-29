@@ -84,7 +84,7 @@ export function makeActivityEnv(inMemory = false) {
 
   const activityEnv: typeof workerEnv & {
     activity: Activity<"every">;
-    events: [string, Job][];
+    events: [string, { queue: string; id: string }][];
   } = workerEnv as any;
 
   activityEnv.activity = null as any;
@@ -93,7 +93,7 @@ export function makeActivityEnv(inMemory = false) {
   activityEnv.setup = async function setup() {
     await workerSetup();
 
-    activityEnv.activity = workerEnv.owl.createActivity({}, (event, job) => {
+    activityEnv.activity = workerEnv.owl.createActivity((event, job) => {
       activityEnv.events.push([event, job]);
     });
   };

@@ -13,6 +13,8 @@ function test(backend: "Redis" | "In-Memory") {
     afterEach(env.teardown);
 
     it("publishes all relevant information", async () => {
+      await delay(50);
+
       await env.producer.enqueue({
         queue: "activity-queue",
         id: "a",
@@ -28,19 +30,14 @@ function test(backend: "Redis" | "In-Memory") {
 
       await env.producer.delete("activity-queue", "b");
 
-      await delay(100);
+      await delay(50);
 
-      expect(env.events).to.have.members([
+      expect(env.events).to.have.deep.members([
         [
           "scheduled",
           {
             queue: "activity-queue",
             id: "a",
-            payload: "lol",
-            runAt: new Date(0),
-            schedule: undefined,
-            times: undefined,
-            count: 1,
           },
         ],
         [
@@ -48,11 +45,6 @@ function test(backend: "Redis" | "In-Memory") {
           {
             queue: "activity-queue",
             id: "b",
-            payload: "lol",
-            runAt: new Date(9999999999999),
-            schedule: undefined,
-            times: undefined,
-            count: 1,
           },
         ],
         [
@@ -67,11 +59,6 @@ function test(backend: "Redis" | "In-Memory") {
           {
             queue: "activity-queue",
             id: "a",
-            payload: "lol",
-            runAt: new Date(0),
-            schedule: undefined,
-            times: undefined,
-            count: 1,
           },
         ],
         [

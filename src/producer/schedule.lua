@@ -17,7 +17,7 @@
 
   Output:
     0 if everything went fine
-    1 if upsert semantics weren't used and there was another job with this id
+    1 if override semantics weren't used and there was another job with this id
 ]]
 
 if ARGV[8] == "false" then  

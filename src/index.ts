@@ -27,8 +27,8 @@ export default class Owl<ScheduleType extends string> {
   }
 
   public createActivity(
-    options: SubscriptionOptions,
-    onEvent: OnActivity<ScheduleType>
+    onEvent: OnActivity,
+    options: SubscriptionOptions = {}
   ) {
     return new Activity<ScheduleType>(this.redisFactory, onEvent, options);
   }

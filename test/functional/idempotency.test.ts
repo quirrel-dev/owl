@@ -9,42 +9,42 @@ function test(backend: "Redis" | "In-Memory") {
     afterEach(env.teardown);
 
     describe("when enqueueing an already-existant ID", () => {
-      describe("and upsert = true", () => {
+      describe("and override = true", () => {
         it("replaces existing job", async () => {
           await env.producer.enqueue({
-            queue: "upsert-true-queue",
+            queue: "override-true-queue",
             id: "a",
             payload: "1",
           });
 
           await env.producer.enqueue({
-            queue: "upsert-true-queue",
+            queue: "override-true-queue",
             id: "a",
             payload: "2",
-            upsert: true,
+            override: true,
           });
 
-          const job = await env.producer.findById("upsert-true-queue", "a");
+          const job = await env.producer.findById("override-true-queue", "a");
           expect(job.payload).to.equal("2");
         });
       });
 
-      describe("and upsert = false", () => {
+      describe("and override = false", () => {
         it("is a no-op", async () => {
           await env.producer.enqueue({
-            queue: "upsert-false-queue",
+            queue: "override-false-queue",
             id: "a",
             payload: "1",
           });
 
           await env.producer.enqueue({
-            queue: "upsert-false-queue",
+            queue: "override-false-queue",
             id: "a",
             payload: "2",
-            upsert: false,
+            override: false,
           });
 
-          const job = await env.producer.findById("upsert-false-queue", "a");
+          const job = await env.producer.findById("override-false-queue", "a");
           expect(job.payload).to.equal("1");
         });
       });
