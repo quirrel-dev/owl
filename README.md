@@ -1,43 +1,78 @@
-# Owl
+# Owl 🦉
 
-This repository contains the code to `@quirrel/owl`.
-It's a queueing library built around the following requirements:
+- [Getting Started](#getting-started)
+- [What's special about Owl?](#whats-special-about-owl)
+- [Quirrel 🐿](https://github.com/quirrel-dev/quirrel)
 
-- [x] optimised for high throughput
-- [x] optimised for short-running jobs
-- [x] delayed & repeated scheduling at totally custom schedules
-- [x] written in TypeScript
-- [x] has an activity log
-- [x] supports fast queries on scheduled jobs
-- [x] supports both idempotency / override characteristics
-- [x] can manage *a lot* of queues
-- [x] queues don't need to be specified beforehand
-- [x] works both with Redis and with an in-memory mock (for development)
+Owl is a high-performance, redis-backed job queueing library originally built for [Quirrel 🐿](https://github.com/quirrel-dev/quirrel).
 
-## How does it work?
+## Getting Started
 
-On a high level, this drawing illustrates Owl's architecture:
+```
+npm install @quirrel/owl
+```
+
+```ts
+import Owl from "@quirrel/owl"
+import Redis from "ioredis"
+
+const owl = new Owl(() => new Redis())
+
+owl.createWorker(async job => {
+  console.log(`${job.queue}: Received job #${job.id} with payload ${job.payload}.`);
+  // ...
+})
+
+const producer = owl.createProducer()
+
+await producer.enqueue({
+  queue: "email",
+  id: "some-random-id",
+  payload: "...",
+  runAt: new Date(Date.now() + 1000),
+  ...
+})
+```
+
+> While I originally created Owl for use in Quirrel, I decided to publish
+> it as its own project so people can use it for their own purposes.
+> If you want to use Owl in your own project and need some more documentation:
+> Please go ahead and create an issue for it :D
+
+## What's special about Owl?
+
+Owl ...
+
+- ... doesn't require you to specify queues upfront
+- ... is optimised for short-running jobs
+- ... allows for totally custom schedules
+- ... is written in TypeScript
+- ... has a low-overhead activity stream (based on Redis Pub/Sub)
+- ... allows fast queries about currently scheduled jobs
+- ... has an persisted mode, but also an in-memory one for quick development
+
+## Owl's Architecture
 
 ![Owl Architecture](./Owl%20Architecture.svg)
 
-I'll try my best to make the architecture obvious from the code, as well.
+A *job* consists of a *Queue*, an *ID* and a *payload*.
 
-## Why *Owl*?
-
-It's well-known that Squirrels 🐿 and Owls 🦉 are good friends.
-Owls are reliable, mostly down-to-earth and know how to deal with time.
-This makes them perfectly suited for the job of a queue keeper.
-
-## Terminology
-
-Jobs are **scheduled** for later execution by the *producer*.
+They are *scheduled* for later execution by the *producer*.
 
 Once the time has come for a job to be executed, a *worker* will *request* it.
 This will move it into a list currently *processing* jobs.
 Aftere execution is finished, the worker *acknowledges* it
-and (in case of repeated jobs) re-enqueues it.
+and (in case of repeated jobs) *re-enqueues* it.
 
-## Compatibility with Redis Cluster
+## Trivia
+
+### Why *Owl*?
+
+It's well-known that Squirrels 🐿 and Owls 🦉 are good friends.
+Owls are reliable, mostly down-to-earth and know how to deal with time.
+Thus, their skillset makes them excellent queue keepers.
+
+### Compatibility with Redis Cluster
 
 At the moment, Owl does not aim to be compatible with Redis Cluster.
 This may change in the future, though.
