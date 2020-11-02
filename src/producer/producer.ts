@@ -61,8 +61,15 @@ export class Producer<ScheduleType extends string> implements Closable {
     });
   }
 
-  public async enqueue(job: JobEnqueue<ScheduleType>) {
+  public async enqueue(
+    job: JobEnqueue<ScheduleType>
+  ): Promise<Job<ScheduleType>> {
     debug("job #%o: enqueueing", job.id);
+
+    if (typeof job.runAt === "undefined") {
+      job.runAt = new Date(0);
+    }
+
     await this.redis.schedule(
       `jobs:${job.queue}:${job.id}`,
       `queues:${job.queue}`,
@@ -70,13 +77,22 @@ export class Producer<ScheduleType extends string> implements Closable {
       job.id,
       job.queue,
       job.payload,
-      job.runAt ? +job.runAt : 0,
+      +job.runAt,
       job.schedule?.type,
       job.schedule?.meta,
       job.times,
       job.override ?? false
     );
     debug("job #%o: enqueued", job.id);
+
+    return {
+      id: job.id,
+      queue: job.queue,
+      count: 1,
+      payload: job.payload,
+      runAt: job.runAt,
+      schedule: job.schedule,
+    };
   }
 
   public async scanQueue(

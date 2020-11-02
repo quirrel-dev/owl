@@ -10,11 +10,20 @@ function test(backend: "Redis" | "In-Memory") {
 
     describe("Producer#scanQueue", () => {
       it("returns pending jobs", async () => {
-        await env.producer.enqueue({
+        const result = await env.producer.enqueue({
           queue: "producer-scan-queue",
           id: "a",
           payload: "a",
           runAt: new Date("2020-10-27T07:36:56.321Z"),
+        });
+
+        expect(result).to.deep.eq({
+          queue: "producer-scan-queue",
+          id: "a",
+          payload: "a",
+          runAt: new Date("2020-10-27T07:36:56.321Z"),
+          count: 1,
+          schedule: undefined,
         });
 
         await env.producer.enqueue({
