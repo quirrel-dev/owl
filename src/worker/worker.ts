@@ -98,7 +98,8 @@ export class Worker implements Closable {
 
   private getNextExecutionDate(
     schedule_type: string,
-    schedule_meta: string
+    schedule_meta: string,
+    lastExecution: Date
   ): number | undefined {
     if (!schedule_type) {
       return undefined;
@@ -109,7 +110,7 @@ export class Worker implements Closable {
       throw new Error(`Schedule ${schedule_type} not found.`);
     }
 
-    const result = scheduleFunc(new Date(), schedule_meta);
+    const result = scheduleFunc(lastExecution, schedule_meta);
     if (!result) {
       return undefined;
     }
@@ -199,7 +200,8 @@ export class Worker implements Closable {
         if (max_times === "" || +count < +max_times) {
           nextExecDate = this.getNextExecutionDate(
             schedule_type,
-            schedule_meta
+            schedule_meta,
+            runAt
           );
         }
 
