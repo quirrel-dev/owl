@@ -1,5 +1,6 @@
-import Owl, { MockOwl } from "../../src";
+import Owl from "../../src";
 import IORedis, { Redis } from "ioredis";
+import IORedisMock from "ioredis-mock";
 import { Producer } from "../../src/producer/producer";
 import { Activity } from "../../src/activity/activity";
 import { Worker } from "../../src/worker/worker";
@@ -25,7 +26,11 @@ export function makeProducerEnv(inMemory = false) {
       every: (lastDate, meta) => new Date(+lastDate + +meta),
     };
     if (inMemory) {
-      env.owl = new MockOwl(scheduleMap);
+      env.redis = new IORedisMock();
+      env.owl = new Owl(
+        () => (env.redis as any).createConnectedClient(),
+        scheduleMap
+      );
     } else {
       env.redis = new IORedis(process.env.REDIS_URL);
       await env.redis.flushall();

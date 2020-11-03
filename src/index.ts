@@ -1,7 +1,6 @@
 import { Redis } from "ioredis";
 import { Producer } from "./producer/producer";
 import { OnError, Processor, Worker } from "./worker/worker";
-import RedisMock from "ioredis-mock";
 import { Activity, OnActivity, SubscriptionOptions } from "./activity/activity";
 
 export { Job, JobEnqueue } from "./Job";
@@ -31,12 +30,5 @@ export default class Owl<ScheduleType extends string> {
     options: SubscriptionOptions = {}
   ) {
     return new Activity<ScheduleType>(this.redisFactory, onEvent, options);
-  }
-}
-
-export class MockOwl<ScheduleType extends string> extends Owl<ScheduleType> {
-  constructor(scheduleMap?: ScheduleMap<ScheduleType>) {
-    const redis = new RedisMock();
-    super(() => (redis as any).createConnectedClient(), scheduleMap);
   }
 }
