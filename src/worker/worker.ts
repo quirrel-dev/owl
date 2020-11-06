@@ -79,15 +79,14 @@ export class Worker implements Closable {
 
     this.events.on("next", (d) => this.requestNextJobs(d));
 
-    this.redisSub.on("message", (channel: string) => {
-      if (channel === "scheduled") {
-        debug("pub/sub: received 'scheduled'");
+    this.redisSub.on("message", (channel) => {
+      setImmediate(() => {
         this.queueIsKnownToBeEmpty = false;
         this.events.emit("next", "sub");
-      }
+      });
     });
 
-    this.redisSub.subscribe("scheduled").then(() => {
+    this.redisSub.subscribe("scheduled", "invoked", "rescheduled").then(() => {
       this.events.emit("next", "init");
     });
   }
@@ -160,16 +159,24 @@ export class Worker implements Closable {
         max_times,
       ] = result;
       const runAt = new Date(+runAtTimestamp);
+
+      const job: Job = {
+        queue,
+        id,
+        payload,
+        runAt,
+        count: +count,
+        times: max_times ? +max_times : undefined,
+        schedule: schedule_type
+          ? {
+              type: schedule_type,
+              meta: schedule_meta,
+            }
+          : undefined,
+      };
       try {
         debug(`requestNextJobs(): job #${id} - started working`);
-        await this.processor({
-          queue,
-          id,
-          payload,
-          runAt,
-          count: +count,
-          times: max_times ? +max_times : undefined,
-        });
+        await this.processor(job);
         debug(`requestNextJobs(): job #${id} - finished working`);
       } catch (error) {
         debug(`requestNextJobs(): job #${id} - failed`);
@@ -183,17 +190,7 @@ export class Worker implements Closable {
 
         await pipeline.exec();
 
-        this.onError?.(
-          {
-            queue,
-            id,
-            payload,
-            runAt,
-            count: +count,
-            times: max_times ? +max_times : undefined,
-          },
-          error
-        );
+        this.onError?.(job, error);
       } finally {
         let nextExecDate: number | undefined = undefined;
 

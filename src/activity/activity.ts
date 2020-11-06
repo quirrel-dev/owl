@@ -1,19 +1,33 @@
 import { Redis } from "ioredis";
 import RedisMock from "ioredis-mock";
 import { Closable } from "../Closable";
+import { Job } from "../Job";
 import { Producer } from "../producer/producer";
 
 export type SubscriptionOptions = { queue?: string; id?: string };
 export type OnActivity = (event: OnActivityEvent) => Promise<void> | void;
 
-type OnActivityEvent =
+export type OnActivityEvent =
   | ScheduledEvent
   | DeletedEvent
   | RequestedEvent
+  | InvokedEvent
+  | RescheduledEvent
   | AcknowledgedEvent;
 
 interface ScheduledEvent {
   type: "scheduled";
+  job: Job;
+}
+
+interface InvokedEvent {
+  type: "invoked";
+  id: string;
+  queue: string;
+}
+
+interface RescheduledEvent {
+  type: "rescheduled";
   id: string;
   queue: string;
 }
@@ -61,17 +75,45 @@ export class Activity<ScheduleType extends string> implements Closable {
     this.redis.psubscribe(`${options.queue ?? "*"}:${options.id ?? "*"}`);
   }
 
-  private async handleMessage(
-    channel: string,
-    message: "scheduled" | "deleted" | "requested" | "acknowledged"
-  ) {
+  private async handleMessage(channel: string, message: string) {
+    const [_type, ...args] = message.split(":");
+    const type = _type as OnActivityEvent["type"];
+
     const [queue, id] = channel.split(":");
 
-    await this.onEvent({
-      type: message,
-      id,
-      queue,
-    });
+    if (type === "scheduled") {
+      const [
+        payload,
+        runDate,
+        schedule_type,
+        schedule_meta,
+        max_times,
+        count,
+      ] = args;
+      await this.onEvent({
+        type: "scheduled",
+        job: {
+          id,
+          queue,
+          payload,
+          runAt: new Date(+runDate),
+          count: Number(count),
+          times: max_times ? Number(max_times) : undefined,
+          schedule: schedule_type
+            ? {
+                type: schedule_type,
+                meta: schedule_meta,
+              }
+            : undefined,
+        },
+      });
+    } else {
+      await this.onEvent({
+        type,
+        id,
+        queue,
+      });
+    }
   }
 
   async close() {

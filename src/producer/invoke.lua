@@ -19,9 +19,9 @@ end
 
 redis.call("ZADD", KEYS[2], 0, ARGV[2] .. ":" .. ARGV[1])
 
--- publishes "scheduled" to "<queue>:<id>"
-redis.call("PUBLISH", ARGV[2] .. ":" .. ARGV[1], "scheduled")
--- publishes "<queue>:<id>" to "scheduled"
-redis.call("PUBLISH", "scheduled", ARGV[2] .. ":" .. ARGV[1])
+-- publishes "invoked" to "<queue>:<id>"
+redis.call("PUBLISH", ARGV[2] .. ":" .. ARGV[1], "invoked")
+-- publishes "<queue>:<id>" to "invoked"
+redis.call("PUBLISH", "invoked", ARGV[2] .. ":" .. ARGV[1])
 
 return 0

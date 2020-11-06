@@ -15,6 +15,8 @@ function test(backend: "Redis" | "In-Memory") {
     describe("every 10 msec", () => {
       describe("without 'times' limit", () => {
         it("executes until deleted", async () => {
+          const start = Date.now();
+
           await env.producer.enqueue({
             queue: "scheduled-eternity",
             id: "a",
@@ -27,8 +29,12 @@ function test(backend: "Redis" | "In-Memory") {
 
           await delay(100);
 
-          expect(env.jobs.length).to.be.closeTo(10, 4);
-          expect(env.jobs.length).to.be.below(11);
+          const end = Date.now();
+
+          const duration = end - start;
+          const expectedExecutions = duration / 10;
+
+          expect(env.jobs.length).to.be.closeTo(expectedExecutions, 1);
 
           expect(env.jobs.every(([, job], index) => job.count === index + 1)).to
             .be.true;
