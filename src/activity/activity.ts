@@ -4,10 +4,37 @@ import { Closable } from "../Closable";
 import { Producer } from "../producer/producer";
 
 export type SubscriptionOptions = { queue?: string; id?: string };
-export type OnActivity = (
-  event: "scheduled" | "deleted" | "requested" | "acknowledged",
-  job: { id: string; queue: string }
-) => Promise<void> | void;
+export type OnActivity = (event: OnActivityEvent) => Promise<void> | void;
+
+type OnActivityEvent =
+  | ScheduledEvent
+  | DeletedEvent
+  | RequestedEvent
+  | AcknowledgedEvent;
+
+interface ScheduledEvent {
+  type: "scheduled";
+  id: string;
+  queue: string;
+}
+
+interface DeletedEvent {
+  type: "deleted";
+  id: string;
+  queue: string;
+}
+
+interface RequestedEvent {
+  type: "requested";
+  id: string;
+  queue: string;
+}
+
+interface AcknowledgedEvent {
+  type: "acknowledged";
+  id: string;
+  queue: string;
+}
 
 export class Activity<ScheduleType extends string> implements Closable {
   private redis;
@@ -40,7 +67,11 @@ export class Activity<ScheduleType extends string> implements Closable {
   ) {
     const [queue, id] = channel.split(":");
 
-    await this.onEvent(message, { id, queue });
+    await this.onEvent({
+      type: message,
+      id,
+      queue,
+    });
   }
 
   async close() {
