@@ -166,11 +166,11 @@ export class Worker implements Closable {
         payload,
         runAt,
         count: +count,
-        times: max_times ? +max_times : undefined,
         schedule: schedule_type
           ? {
               type: schedule_type,
               meta: schedule_meta,
+              times: max_times ? +max_times : undefined,
             }
           : undefined,
       };
