@@ -15,13 +15,13 @@ function test(backend: "Redis" | "In-Memory") {
     it("publishes all relevant information", async () => {
       await delay(50);
 
-      const currentDate = new Date()
+      const currentDate = new Date();
 
       await env.producer.enqueue({
         queue: "activity-queue",
         id: "a",
         payload: "lol",
-        runAt: currentDate
+        runAt: currentDate,
       });
 
       await env.producer.enqueue({
@@ -45,7 +45,6 @@ function test(backend: "Redis" | "In-Memory") {
             runAt: currentDate,
             count: 1,
             schedule: undefined,
-            times: undefined
           },
         },
         {
@@ -57,7 +56,6 @@ function test(backend: "Redis" | "In-Memory") {
             runAt: new Date(9999999999999),
             count: 1,
             schedule: undefined,
-            times: undefined
           },
         },
         {

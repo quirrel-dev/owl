@@ -80,7 +80,7 @@ export class Producer<ScheduleType extends string> implements Closable {
       +job.runAt,
       job.schedule?.type,
       job.schedule?.meta,
-      job.times,
+      job.schedule?.times,
       job.override ?? false
     );
     debug("job #%o: enqueued", job.id);
@@ -191,10 +191,10 @@ export class Producer<ScheduleType extends string> implements Closable {
           ? {
               type: schedule_type,
               meta: schedule_meta,
+              times: max_times ? +max_times : undefined,
             }
           : undefined,
         count: +count,
-        times: max_times ? +max_times : undefined,
       });
     }
 

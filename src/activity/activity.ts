@@ -98,11 +98,11 @@ export class Activity<ScheduleType extends string> implements Closable {
           payload,
           runAt: new Date(+runDate),
           count: Number(count),
-          times: max_times ? Number(max_times) : undefined,
           schedule: schedule_type
             ? {
                 type: schedule_type,
                 meta: schedule_meta,
+                times: max_times ? Number(max_times) : undefined,
               }
             : undefined,
         },

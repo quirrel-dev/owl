@@ -46,7 +46,6 @@ function test(backend: "Redis" | "In-Memory") {
             runAt: new Date("2020-10-27T07:36:56.321Z"),
             schedule: undefined,
             count: 1,
-            times: undefined,
           },
           {
             queue: "producer-scan-queue",
@@ -55,7 +54,6 @@ function test(backend: "Redis" | "In-Memory") {
             runAt: new Date("2020-10-27T07:36:56.321Z"),
             schedule: undefined,
             count: 1,
-            times: undefined,
           },
         ]);
 
@@ -84,7 +82,6 @@ function test(backend: "Redis" | "In-Memory") {
           runAt: new Date("2020-10-27T07:36:56.321Z"),
           schedule: undefined,
           count: 1,
-          times: undefined,
         });
       });
 

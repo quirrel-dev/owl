@@ -7,10 +7,10 @@ export interface Job<ScheduleType extends string = string> {
   schedule?: {
     type: ScheduleType;
     meta: string;
+    times?: number;
   };
 
   count: number;
-  times?: number;
 }
 
 export interface JobEnqueue<ScheduleType extends string = string> {
@@ -26,7 +26,7 @@ export interface JobEnqueue<ScheduleType extends string = string> {
   override?: boolean;
 
   /**
-   * Optional: Scheduled data.
+   * Optional: Schedule options.
    */
   schedule?: {
     /**
@@ -40,10 +40,10 @@ export interface JobEnqueue<ScheduleType extends string = string> {
      * Metadata passed to ScheduleKeeper.
      */
     meta: string;
-  };
 
-  /**
-   * Maximum number of executions to be made.
-   */
-  times?: number;
+    /**
+     * Maximum number of executions to be made.
+     */
+    times?: number;
+  };
 }

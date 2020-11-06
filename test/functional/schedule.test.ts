@@ -63,8 +63,8 @@ function test(backend: "Redis" | "In-Memory") {
             schedule: {
               type: "every",
               meta: "10",
+              times: 5,
             },
-            times: 5,
           });
 
           await delay(100);
