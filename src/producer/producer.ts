@@ -67,7 +67,7 @@ export class Producer<ScheduleType extends string> implements Closable {
     debug("job #%o: enqueueing", job.id);
 
     if (typeof job.runAt === "undefined") {
-      job.runAt = new Date(0);
+      job.runAt = new Date();
     }
 
     await this.redis.schedule(
@@ -80,7 +80,7 @@ export class Producer<ScheduleType extends string> implements Closable {
       +job.runAt,
       job.schedule?.type,
       job.schedule?.meta,
-      job.times,
+      job.schedule?.times,
       job.override ?? false
     );
     debug("job #%o: enqueued", job.id);
@@ -191,10 +191,10 @@ export class Producer<ScheduleType extends string> implements Closable {
           ? {
               type: schedule_type,
               meta: schedule_meta,
+              times: max_times ? +max_times : undefined,
             }
           : undefined,
         count: +count,
-        times: max_times ? +max_times : undefined,
       });
     }
 

@@ -2,7 +2,7 @@ import Owl from "../../src";
 import IORedis, { Redis } from "ioredis";
 import IORedisMock from "ioredis-mock";
 import { Producer } from "../../src/producer/producer";
-import { Activity } from "../../src/activity/activity";
+import { Activity, OnActivityEvent } from "../../src/activity/activity";
 import { Worker } from "../../src/worker/worker";
 import { Job } from "../../src/Job";
 
@@ -89,7 +89,7 @@ export function makeActivityEnv(inMemory = false) {
 
   const activityEnv: typeof workerEnv & {
     activity: Activity<"every">;
-    events: [string, { queue: string; id: string }][];
+    events: OnActivityEvent[];
   } = workerEnv as any;
 
   activityEnv.activity = null as any;
@@ -98,8 +98,8 @@ export function makeActivityEnv(inMemory = false) {
   activityEnv.setup = async function setup() {
     await workerSetup();
 
-    activityEnv.activity = workerEnv.owl.createActivity((event, job) => {
-      activityEnv.events.push([event, job]);
+    activityEnv.activity = workerEnv.owl.createActivity((event) => {
+      activityEnv.events.push(event);
     });
   };
 
