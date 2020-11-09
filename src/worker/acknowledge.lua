@@ -30,7 +30,7 @@ else
   redis.call("HINCRBY", KEYS[1], "count", 1)
   
   -- publishes "rescheduled" to "<queue>:<id>"
-  redis.call("PUBLISH", ARGV[2] .. ":" .. ARGV[1], "rescheduled")
+  redis.call("PUBLISH", ARGV[2] .. ":" .. ARGV[1], "rescheduled:" .. ARGV[3])
   -- publishes "<queue>:<id>" to "rescheduled"
   redis.call("PUBLISH", "rescheduled", ARGV[2] .. ":" .. ARGV[1])
 end
