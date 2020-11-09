@@ -20,7 +20,7 @@ function test(backend: "Redis" | "In-Memory") {
       await env.producer.enqueue({
         queue: "activity-queue",
         id: "a",
-        payload: "lol",
+        payload: '{"lol":"lel"}',
         runAt: currentDate,
       });
 
@@ -39,8 +39,8 @@ function test(backend: "Redis" | "In-Memory") {
         schedule: {
           type: "every",
           meta: "10",
-          times: 2
-        }
+          times: 2,
+        },
       });
 
       await env.producer.delete("activity-queue", "b");
@@ -53,7 +53,7 @@ function test(backend: "Redis" | "In-Memory") {
           job: {
             queue: "activity-queue",
             id: "a",
-            payload: "lol",
+            payload: '{"lol":"lel"}',
             runAt: currentDate,
             count: 1,
             schedule: undefined,
@@ -81,8 +81,8 @@ function test(backend: "Redis" | "In-Memory") {
             schedule: {
               type: "every",
               meta: "10",
-              times: 2
-            }
+              times: 2,
+            },
           },
         },
         {

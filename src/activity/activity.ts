@@ -4,6 +4,35 @@ import { Closable } from "../Closable";
 import { Job } from "../Job";
 import { Producer } from "../producer/producer";
 
+/**
+ * Like String.split, but has a maximum number of delimiters it picks up.
+ * @param message
+ * @param maxParts
+ * @param delimiter
+ */
+function splitEvent(message: string, maxParts: number, delimiter = ":") {
+  const result: string[] = [];
+  let currentOne = "";
+
+  for (let i = 0; i < message.length; i++) {
+    const char = message[i];
+    if (char === delimiter) {
+      if (result.length === maxParts - 1) {
+        result.push(currentOne + message.slice(i));
+        return result;
+      } else {
+        result.push(currentOne);
+        currentOne = "";
+      }
+    } else {
+      currentOne += char;
+    }
+  }
+
+  result.push(currentOne);
+  return result;
+}
+
 export type SubscriptionOptions = { queue?: string; id?: string };
 export type OnActivity = (event: OnActivityEvent) => Promise<void> | void;
 
@@ -77,19 +106,19 @@ export class Activity<ScheduleType extends string> implements Closable {
   }
 
   private async handleMessage(channel: string, message: string) {
-    const [_type, ...args] = message.split(":");
+    const [_type, ...args] = splitEvent(message, 7);
     const type = _type as OnActivityEvent["type"];
 
     const [queue, id] = channel.split(":");
 
     if (type === "scheduled") {
       const [
-        payload,
         runDate,
         schedule_type,
         schedule_meta,
         max_times,
         count,
+        payload,
       ] = args;
       await this.onEvent({
         type: "scheduled",
