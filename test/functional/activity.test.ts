@@ -31,6 +31,18 @@ function test(backend: "Redis" | "In-Memory") {
         runAt: new Date(9999999999999),
       });
 
+      await env.producer.enqueue({
+        queue: "activity-queue",
+        id: "repeated",
+        payload: "lol",
+        runAt: currentDate,
+        schedule: {
+          type: "every",
+          meta: "10",
+          times: 2
+        }
+      });
+
       await env.producer.delete("activity-queue", "b");
 
       await delay(50);
@@ -59,6 +71,21 @@ function test(backend: "Redis" | "In-Memory") {
           },
         },
         {
+          type: "scheduled",
+          job: {
+            queue: "activity-queue",
+            id: "repeated",
+            payload: "lol",
+            count: 1,
+            runAt: currentDate,
+            schedule: {
+              type: "every",
+              meta: "10",
+              times: 2
+            }
+          },
+        },
+        {
           type: "deleted",
           queue: "activity-queue",
           id: "b",
@@ -69,9 +96,35 @@ function test(backend: "Redis" | "In-Memory") {
           id: "a",
         },
         {
+          type: "requested",
+          queue: "activity-queue",
+          id: "repeated",
+        },
+        {
           type: "acknowledged",
           queue: "activity-queue",
           id: "a",
+        },
+        {
+          type: "acknowledged",
+          queue: "activity-queue",
+          id: "repeated",
+        },
+        {
+          type: "rescheduled",
+          queue: "activity-queue",
+          runAt: new Date(+currentDate + 10),
+          id: "repeated",
+        },
+        {
+          type: "requested",
+          queue: "activity-queue",
+          id: "repeated",
+        },
+        {
+          type: "acknowledged",
+          queue: "activity-queue",
+          id: "repeated",
         },
       ]);
     });

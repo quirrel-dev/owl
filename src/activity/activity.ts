@@ -30,6 +30,7 @@ interface RescheduledEvent {
   type: "rescheduled";
   id: string;
   queue: string;
+  runAt: Date;
 }
 
 interface DeletedEvent {
@@ -106,6 +107,14 @@ export class Activity<ScheduleType extends string> implements Closable {
               }
             : undefined,
         },
+      });
+    } else if (type === "rescheduled") {
+      const [runDate] = args;
+      await this.onEvent({
+        type: "rescheduled",
+        id,
+        queue,
+        runAt: new Date(+runDate),
       });
     } else {
       await this.onEvent({
