@@ -35,7 +35,8 @@ declare module "ioredis" {
       jobTableJobId: string,
       queueKey: string,
       id: string,
-      queue: string
+      queue: string,
+      newRunAt: number
     ): Promise<0 | 1>;
   }
 }
@@ -231,7 +232,8 @@ export class Producer<ScheduleType extends string> implements Closable {
       `jobs:${queue}:${id}`,
       "queue",
       id,
-      queue
+      queue,
+      Date.now()
     );
     switch (result) {
       case 0:
