@@ -26,7 +26,8 @@ declare module "ioredis" {
           schedule_type: string,
           schedule_meta: string,
           count: string,
-          max_times: string
+          max_times: string,
+          exclusive: "true" | "false"
         ]
       | null
       | number
@@ -157,6 +158,7 @@ export class Worker implements Closable {
         schedule_meta,
         count,
         max_times,
+        exclusive,
       ] = result;
       const runAt = new Date(+runAtTimestamp);
 
@@ -166,6 +168,7 @@ export class Worker implements Closable {
         payload,
         runAt,
         count: +count,
+        exclusive: exclusive === "true",
         schedule: schedule_type
           ? {
               type: schedule_type,

@@ -106,7 +106,7 @@ export class Activity<ScheduleType extends string> implements Closable {
   }
 
   private async handleMessage(channel: string, message: string) {
-    const [_type, ...args] = splitEvent(message, 7);
+    const [_type, ...args] = splitEvent(message, 8);
     const type = _type as OnActivityEvent["type"];
 
     const [queue, id] = channel.split(":");
@@ -117,6 +117,7 @@ export class Activity<ScheduleType extends string> implements Closable {
         schedule_type,
         schedule_meta,
         max_times,
+        exclusive,
         count,
         payload,
       ] = args;
@@ -128,6 +129,7 @@ export class Activity<ScheduleType extends string> implements Closable {
           payload,
           runAt: new Date(+runDate),
           count: Number(count),
+          exclusive: exclusive === "true",
           schedule: schedule_type
             ? {
                 type: schedule_type,
