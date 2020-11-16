@@ -95,6 +95,47 @@ function test(backend: "Redis" | "In-Memory") {
         ]);
       });
     });
+
+    describe("non-exclusive followed by exclusive", () => {
+      it("executes jobs in serial", async () => {
+        await env.producer.enqueue({
+          id: "a",
+          payload: "abcde",
+          queue: "my-queue",
+          exclusive: false,
+        });
+
+        await env.producer.enqueue({
+          id: "b",
+          payload: "abcde",
+          queue: "my-queue",
+          exclusive: true,
+        });
+
+        await delay(50);
+
+        const indexOfARequested = env.events.findIndex(
+          (e) => e.type === "requested" && e.id === "a"
+        );
+        const indexOfBRequested = env.events.findIndex(
+          (e) => e.type === "requested" && e.id === "b"
+        );
+
+        const indexOfAAcknowledged = env.events.findIndex(
+          (e) => e.type === "acknowledged" && e.id === "a"
+        );
+        const indexOfBAcknowledged = env.events.findIndex(
+          (e) => e.type === "acknowledged" && e.id === "b"
+        );
+
+        expectInOrder([
+          indexOfARequested,
+          indexOfAAcknowledged,
+          indexOfBRequested,
+          indexOfBAcknowledged,
+        ]);
+      });
+    });
   });
 }
 
