@@ -6,7 +6,8 @@
   Input:
     KEYS[1] queue
     KEYS[2] processing
-    KEYS[3] blocked queues
+    KEYS[3] hard-blocked queues
+    KEYS[4] soft-block counter hashmap
 
     ARGV[1] job table prefix
     ARGV[2] current timestamp
@@ -50,8 +51,6 @@ if redis.call("SISMEMBER", KEYS[3], queue) == 1 then
   return -1
 end
 
-redis.call("SADD", KEYS[2], queueAndId)
-
 local jobData = redis.call("HMGET", ARGV[1] .. ":" .. queueAndId, "payload", "schedule_type", "schedule_meta", "count", "max_times", "exclusive")
 
 local payload = jobData[1]
@@ -62,8 +61,17 @@ local max_times = jobData[5]
 local exclusive = jobData[6]
 
 if exclusive == "true" then
-  redis.call("SADD", KEYS[3], queue)
+  if redis.call("HGET", KEYS[4], queue) ~= "0" then
+    redis.call("ZADD", ARGV[3] .. ":" .. queue, scoreString, id)
+    return -1
+  else
+    redis.call("SADD", KEYS[3], queue)
+  end
 end
+
+redis.call("HINCRBY", KEYS[4], queue, 1)
+
+redis.call("SADD", KEYS[2], queueAndId)
 
 -- publishes "requested" to "<queue>:<id>"
 redis.call("PUBLISH", queue .. ":" .. id, "requested")

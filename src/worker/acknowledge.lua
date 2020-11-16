@@ -8,13 +8,13 @@
     KEYS[3] processing
     KEYS[4] queues
     KEYS[5] blocked jobs zset key
-    KEYS[5] blocked queues set key
+    KEYS[6] blocked queues set key
+    KEYS[7] soft-block counter hashmap
 
     ARGV[1] id
     ARGV[2] queue
     ARGV[3] timestamp to reschedule for
             if undefined / empty string, job will be deleted
-    ARGV[4] job was blocking
 ]]
 
 redis.call("SREM", KEYS[3], ARGV[2] .. ":" .. ARGV[1])
@@ -38,9 +38,11 @@ else
   redis.call("PUBLISH", "rescheduled", ARGV[2] .. ":" .. ARGV[1])
 end
 
-if ARGV[4] == "true" then
-  local blocked = redis.call("ZRANGE", KEYS[5], 0, -1, "WITHSCORES")
+redis.call("HINCRBY", KEYS[7], ARGV[2], -1)
 
+local blocked = redis.call("ZRANGE", KEYS[5], 0, -1, "WITHSCORES")
+
+if #blocked > 0 then
   for i = 1, #blocked - 1, 2
   do
     local id = blocked[i]
@@ -51,6 +53,5 @@ if ARGV[4] == "true" then
 
   redis.call("DEL", KEYS[5])
   redis.call("SREM", KEYS[6], ARGV[2])
-
   redis.call("PUBLISH", "unblocked", ARGV[2])
 end

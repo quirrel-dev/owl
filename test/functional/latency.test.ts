@@ -23,7 +23,7 @@ function test(backend: "Redis" | "In-Memory") {
     describe("when inserting 1000 jobs", () => {
       it("they're executed in 1 sec", async function () {
         if (backend === "In-Memory") {
-          this.timeout(10000);
+          this.timeout(15 * 1000);
         }
 
         const enqueueals: Promise<any>[] = [];
