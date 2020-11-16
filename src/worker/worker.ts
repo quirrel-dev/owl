@@ -16,6 +16,7 @@ declare module "ioredis" {
       queueKey: string,
       processingKey: string,
       blockedQueuesKey: string,
+      softBlockCounterKey: string,
       jobTablePrefix: string,
       currentTimestamp: number,
       blockedQueuesPrefix: string
@@ -42,10 +43,10 @@ declare module "ioredis" {
       scheduledQueueKey: string,
       blockedJobsKey: string,
       blockedQueuesSetKey: string,
+      softBlockCounterKey: string,
       id: string,
       queue: string,
-      timestampToRescheduleFor: number | undefined,
-      jobWasBlocking: boolean
+      timestampToRescheduleFor: number | undefined
     ): Promise<void>;
   }
 }
@@ -76,12 +77,12 @@ export class Worker implements Closable {
 
     this.redis.defineCommand("request", {
       lua: fs.readFileSync(path.join(__dirname, "request.lua")).toString(),
-      numberOfKeys: 3,
+      numberOfKeys: 4,
     });
 
     this.redis.defineCommand("acknowledge", {
       lua: fs.readFileSync(path.join(__dirname, "acknowledge.lua")).toString(),
-      numberOfKeys: 6,
+      numberOfKeys: 7,
     });
 
     this.events.on("next", (d) => this.requestNextJobs(d));
@@ -141,6 +142,7 @@ export class Worker implements Closable {
       "queue",
       "processing",
       "blocked-queues",
+      "soft-block",
       "jobs",
       Date.now(),
       "blocked"
@@ -228,10 +230,10 @@ export class Worker implements Closable {
           "queue",
           `blocked:${queue}`,
           "blocked-queues",
+          "soft-block",
           id,
           queue,
-          nextExecDate,
-          exclusive === "true"
+          nextExecDate
         );
         if (nextExecDate) {
           debug(
