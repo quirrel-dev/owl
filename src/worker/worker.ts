@@ -15,8 +15,10 @@ declare module "ioredis" {
     request(
       queueKey: string,
       processingKey: string,
+      blockedQueuesKey: string,
       jobTablePrefix: string,
-      currentTimestamp: number
+      currentTimestamp: number,
+      blockedQueuesPrefix: string
     ): Promise<
       | [
           queue: string,
@@ -26,9 +28,11 @@ declare module "ioredis" {
           schedule_type: string,
           schedule_meta: string,
           count: string,
-          max_times: string
+          max_times: string,
+          exclusive: "true" | "false"
         ]
       | null
+      | -1
       | number
     >;
     acknowledge(
@@ -36,9 +40,12 @@ declare module "ioredis" {
       jobTableQueueIndex: string,
       processingKey: string,
       scheduledQueueKey: string,
+      blockedJobsKey: string,
+      blockedQueuesSetKey: string,
       id: string,
       queue: string,
-      timestampToRescheduleFor: number | undefined
+      timestampToRescheduleFor: number | undefined,
+      jobWasBlocking: boolean
     ): Promise<void>;
   }
 }
@@ -69,12 +76,12 @@ export class Worker implements Closable {
 
     this.redis.defineCommand("request", {
       lua: fs.readFileSync(path.join(__dirname, "request.lua")).toString(),
-      numberOfKeys: 2,
+      numberOfKeys: 3,
     });
 
     this.redis.defineCommand("acknowledge", {
       lua: fs.readFileSync(path.join(__dirname, "acknowledge.lua")).toString(),
-      numberOfKeys: 4,
+      numberOfKeys: 6,
     });
 
     this.events.on("next", (d) => this.requestNextJobs(d));
@@ -86,9 +93,11 @@ export class Worker implements Closable {
       });
     });
 
-    this.redisSub.subscribe("scheduled", "invoked", "rescheduled").then(() => {
-      this.events.emit("next", "init");
-    });
+    this.redisSub
+      .subscribe("scheduled", "invoked", "rescheduled", "unblocked")
+      .then(() => {
+        this.events.emit("next", "init");
+      });
   }
 
   private isMaxedOut() {
@@ -131,13 +140,21 @@ export class Worker implements Closable {
     const result = await this.redis.request(
       "queue",
       "processing",
+      "blocked-queues",
       "jobs",
-      Date.now()
+      Date.now(),
+      "blocked"
     );
 
     if (!result) {
       debug("requestNextJobs(): skipped (queue is empty)");
       this.queueIsKnownToBeEmpty = true;
+      return;
+    }
+
+    if (result === -1) {
+      debug("requestNextJobs(): job's blocked", result);
+      this.events.emit("next");
       return;
     }
 
@@ -157,6 +174,7 @@ export class Worker implements Closable {
         schedule_meta,
         count,
         max_times,
+        exclusive,
       ] = result;
       const runAt = new Date(+runAtTimestamp);
 
@@ -166,6 +184,7 @@ export class Worker implements Closable {
         payload,
         runAt,
         count: +count,
+        exclusive: exclusive === "true",
         schedule: schedule_type
           ? {
               type: schedule_type,
@@ -207,9 +226,12 @@ export class Worker implements Closable {
           `queues:${queue}`,
           "processing",
           "queue",
+          `blocked:${queue}`,
+          "blocked-queues",
           id,
           queue,
-          nextExecDate
+          nextExecDate,
+          exclusive === "true"
         );
         if (nextExecDate) {
           debug(

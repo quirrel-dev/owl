@@ -29,6 +29,7 @@ function test(backend: "Redis" | "In-Memory") {
         id: "b",
         payload: "lol",
         runAt: new Date(9999999999999),
+        exclusive: true,
       });
 
       await env.producer.enqueue({
@@ -57,6 +58,7 @@ function test(backend: "Redis" | "In-Memory") {
             runAt: currentDate,
             count: 1,
             schedule: undefined,
+            exclusive: false
           },
         },
         {
@@ -68,6 +70,7 @@ function test(backend: "Redis" | "In-Memory") {
             runAt: new Date(9999999999999),
             count: 1,
             schedule: undefined,
+            exclusive: true
           },
         },
         {
@@ -78,6 +81,7 @@ function test(backend: "Redis" | "In-Memory") {
             payload: "lol",
             count: 1,
             runAt: currentDate,
+            exclusive: false,
             schedule: {
               type: "every",
               meta: "10",

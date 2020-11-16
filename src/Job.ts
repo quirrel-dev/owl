@@ -4,6 +4,8 @@ export interface Job<ScheduleType extends string = string> {
   payload: string;
 
   runAt: Date;
+  exclusive: boolean;
+
   schedule?: {
     type: ScheduleType;
     meta: string;
@@ -19,6 +21,12 @@ export interface JobEnqueue<ScheduleType extends string = string> {
   payload: string;
 
   runAt?: Date;
+
+  /**
+   * If set to `true`, no other job on the same queue
+   * will be executed at the same time as this job.
+   */
+  exclusive?: boolean;
 
   /**
    * Override if ID already exists

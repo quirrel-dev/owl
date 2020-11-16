@@ -24,6 +24,7 @@ function test(backend: "Redis" | "In-Memory") {
           runAt: new Date("2020-10-27T07:36:56.321Z"),
           count: 1,
           schedule: undefined,
+          exclusive: false,
         });
 
         await env.producer.enqueue({
@@ -46,6 +47,7 @@ function test(backend: "Redis" | "In-Memory") {
             runAt: new Date("2020-10-27T07:36:56.321Z"),
             schedule: undefined,
             count: 1,
+            exclusive: false,
           },
           {
             queue: "producer-scan-queue",
@@ -54,6 +56,7 @@ function test(backend: "Redis" | "In-Memory") {
             runAt: new Date("2020-10-27T07:36:56.321Z"),
             schedule: undefined,
             count: 1,
+            exclusive: false,
           },
         ]);
 
@@ -82,6 +85,7 @@ function test(backend: "Redis" | "In-Memory") {
           runAt: new Date("2020-10-27T07:36:56.321Z"),
           schedule: undefined,
           count: 1,
+          exclusive: false,
         });
       });
 
