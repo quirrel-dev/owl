@@ -98,6 +98,8 @@ export function makeActivityEnv(inMemory = false) {
   activityEnv.setup = async function setup() {
     await workerSetup();
 
+    activityEnv.events = [];
+
     activityEnv.activity = workerEnv.owl.createActivity((event) => {
       activityEnv.events.push(event);
     });
