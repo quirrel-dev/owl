@@ -6,6 +6,10 @@ import { Activity, OnActivityEvent } from "../../src/activity/activity";
 import { Worker } from "../../src/worker/worker";
 import { Job } from "../../src/Job";
 
+export function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function makeProducerEnv(inMemory = false) {
   const env: {
     redis: Redis;
