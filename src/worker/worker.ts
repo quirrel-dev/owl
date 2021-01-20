@@ -51,7 +51,13 @@ declare module "ioredis" {
   }
 }
 
-export type Processor = (job: Job) => Promise<void>;
+export interface ProcessorMeta {
+  dontReschedule(): void;
+}
+export type Processor = (
+  job: Job,
+  processorMeta: ProcessorMeta
+) => Promise<void>;
 export type OnError = (job: Job, error: Error) => void;
 
 export class Worker implements Closable {
@@ -195,9 +201,15 @@ export class Worker implements Closable {
             }
           : undefined,
       };
+
+      let dontReschedule = false;
       try {
         debug(`requestNextJobs(): job #${id} - started working`);
-        await this.processor(job);
+        await this.processor(job, {
+          dontReschedule() {
+            dontReschedule = true;
+          },
+        });
         debug(`requestNextJobs(): job #${id} - finished working`);
       } catch (error) {
         debug(`requestNextJobs(): job #${id} - failed`);
@@ -221,6 +233,10 @@ export class Worker implements Closable {
             schedule_meta,
             runAt
           );
+        }
+
+        if (dontReschedule) {
+          nextExecDate = undefined;
         }
 
         await this.redis.acknowledge(

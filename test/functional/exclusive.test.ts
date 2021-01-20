@@ -1,9 +1,5 @@
 import { expect } from "chai";
-import { makeActivityEnv } from "./support";
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+import { delay, makeActivityEnv } from "./support";
 
 function expectInOrder(numbers: number[]) {
   expect(numbers).to.eql([...numbers].sort());
