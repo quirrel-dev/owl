@@ -216,10 +216,12 @@ export class Worker implements Closable {
 
         const pipeline = this.redis.pipeline();
 
-        pipeline.publish("fail", `${queue}:${id}:${error}`);
-        pipeline.publish(queue, `fail:${id}:${error}`);
-        pipeline.publish(`${queue}:${id}`, `fail:${error}`);
-        pipeline.publish(`${queue}:${id}:fail`, error);
+        const errorString = encodeURIComponent(error);
+
+        pipeline.publish("fail", `${queue}:${id}:${errorString}`);
+        pipeline.publish(queue, `fail:${id}:${errorString}`);
+        pipeline.publish(`${queue}:${id}`, `fail:${errorString}`);
+        pipeline.publish(`${queue}:${id}:fail`, errorString);
 
         await pipeline.exec();
 

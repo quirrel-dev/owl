@@ -1,5 +1,4 @@
 import { expect } from "chai";
-import { type } from "os";
 import { makeActivityEnv } from "./support";
 
 function delay(ms: number) {
@@ -45,7 +44,6 @@ function test(backend: "Redis" | "In-Memory") {
           "scheduled",
           "requested",
           "fail",
-          // "Error",
           "acknowledged",
         ]);
         expect(env.jobs).to.equal([]);

@@ -109,7 +109,12 @@ export class Activity<ScheduleType extends string> implements Closable {
     const [_type, ...args] = splitEvent(message, 8);
     const type = _type as OnActivityEvent["type"];
 
-    const [queue, id] = channel.split(":");
+    const channelParts = channel.split(":");
+    if (channelParts.length !== 2) {
+      return;
+    }
+
+    const [queue, id] = channelParts;
 
     if (type === "scheduled") {
       const [
