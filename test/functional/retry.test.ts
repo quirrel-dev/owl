@@ -65,6 +65,8 @@ function test(backend: "Redis" | "In-Memory") {
           "acknowledged",
         ]);
 
+        expect(env.errors).to.have.length(1);
+
         const executionDates = env.jobs.map(([executionDate]) => executionDate);
         expect(executionDates).to.have.length(4);
         expect(executionDates[1] - executionDates[0]).to.be.within(5, 15);

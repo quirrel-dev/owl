@@ -67,23 +67,30 @@ export function makeWorkerEnv(
   const workerEnv: typeof producerEnv & {
     worker: Worker;
     jobs: [number, Job][];
+    errors: [Job, Error][];
   } = producerEnv as any;
 
   workerEnv.worker = null as any;
   workerEnv.jobs = [];
+  workerEnv.errors = [];
 
   workerEnv.setup = async function setup() {
     await producerSetup();
 
     workerEnv.jobs = [];
 
-    workerEnv.worker = producerEnv.owl.createWorker(async (job) => {
-      workerEnv.jobs.push([Date.now(), job]);
+    workerEnv.worker = producerEnv.owl.createWorker(
+      async (job) => {
+        workerEnv.jobs.push([Date.now(), job]);
 
-      if (fail(job)) {
-        throw new Error("failing!");
+        if (fail(job)) {
+          throw new Error("failing!");
+        }
+      },
+      (job, error) => {
+        workerEnv.errors.push([job, error]);
       }
-    });
+    );
   };
 
   workerEnv.teardown = async function teardown() {
