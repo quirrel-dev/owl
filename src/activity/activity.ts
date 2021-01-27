@@ -125,6 +125,7 @@ export class Activity<ScheduleType extends string> implements Closable {
         exclusive,
         count,
         payload,
+        retryJson,
       ] = args;
       await this.onEvent({
         type: "scheduled",
@@ -135,6 +136,7 @@ export class Activity<ScheduleType extends string> implements Closable {
           runAt: new Date(+runDate),
           count: Number(count),
           exclusive: exclusive === "true",
+          retry: JSON.parse(retryJson),
           schedule: schedule_type
             ? {
                 type: schedule_type,
