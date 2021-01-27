@@ -51,7 +51,7 @@ if redis.call("SISMEMBER", KEYS[3], queue) == 1 then
   return -1
 end
 
-local jobData = redis.call("HMGET", ARGV[1] .. ":" .. queueAndId, "payload", "schedule_type", "schedule_meta", "count", "max_times", "exclusive")
+local jobData = redis.call("HMGET", ARGV[1] .. ":" .. queueAndId, "payload", "schedule_type", "schedule_meta", "count", "max_times", "exclusive", "retry")
 
 local payload = jobData[1]
 local schedule_type = jobData[2]
@@ -59,6 +59,7 @@ local schedule_meta = jobData[3]
 local count = jobData[4]
 local max_times = jobData[5]
 local exclusive = jobData[6]
+local retry = jobData[7]
 
 if exclusive == "true" then
   if redis.call("HGET", KEYS[4], queue) ~= "0" then
@@ -78,4 +79,4 @@ redis.call("PUBLISH", queue .. ":" .. id, "requested")
 -- publishes "<queue>:<id>" to "requested"
 redis.call("PUBLISH", "requested", queue .. ":" .. id)
 
-return { queue, id, payload, score, schedule_type, schedule_meta, count, max_times, exclusive }
+return { queue, id, payload, score, schedule_type, schedule_meta, count, max_times, exclusive, retry }

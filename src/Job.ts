@@ -6,6 +6,8 @@ export interface Job<ScheduleType extends string = string> {
   runAt: Date;
   exclusive: boolean;
 
+  retry: number[];
+
   schedule?: {
     type: ScheduleType;
     meta: string;

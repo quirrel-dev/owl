@@ -12,25 +12,33 @@ function test(backend: "Redis" | "In-Memory") {
     beforeEach(env.setup);
     afterEach(env.teardown);
 
-    describe("when given an empty array", () => {
+    describe("when given both retry and schedule", () => {
       it("throws", async () => {
         try {
           await env.producer.enqueue({
             queue: "scheduled-eternity",
             id: "a",
             payload: "a",
-            retry: [],
+            retry: [10, 100, 1000],
+            schedule: {
+              type: "every",
+              meta: "100",
+            },
           });
 
           expect(true).to.be.false;
         } catch (error) {
-          expect(error.message).to.equal("retry must not be empty");
+          expect(error.message).to.equal(
+            "retry and schedule cannot be used together"
+          );
         }
       });
     });
 
     describe("when given retry: [10, 100, 1000]", () => {
       it("retries along that schedule", async () => {
+        await delay(10);
+
         await env.producer.enqueue({
           queue: "scheduled-eternity",
           id: "a",
@@ -40,13 +48,31 @@ function test(backend: "Redis" | "In-Memory") {
 
         await delay(500);
 
+        const retryCycle = [
+          "requested",
+          "retry",
+          "acknowledged",
+          "rescheduled",
+        ];
+
         expect(env.events.map((e) => e.type)).to.deep.equal([
           "scheduled",
+          ...retryCycle,
+          ...retryCycle,
+          ...retryCycle,
           "requested",
           "fail",
           "acknowledged",
         ]);
-        expect(env.jobs).to.equal([]);
+
+        const executionDates = env.jobs.map(([executionDate]) => executionDate);
+        expect(executionDates).to.have.length(4);
+        expect(executionDates[1] - executionDates[0]).to.be.within(5, 15);
+        expect(executionDates[2] - executionDates[0]).to.be.within(90, 110);
+        expect(executionDates[3] - executionDates[0]).to.be.within(190, 210);
+
+        const counts = env.jobs.map(([, job]) => job.count);
+        expect(counts).to.eql([1, 2, 3, 4]);
       });
     });
   });
