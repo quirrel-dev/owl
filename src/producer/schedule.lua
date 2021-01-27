@@ -15,6 +15,7 @@
     ARGV[7] maximum execution times
     ARGV[8] override if id already exists
     ARGV[9] exclusive
+    ARGV[10] retryIntervals (as JSON array)
 
   Output:
     0 if everything went fine
@@ -27,7 +28,7 @@ if ARGV[8] == "false" then
   end
 end
 
-redis.call("HSET", KEYS[1], "payload", ARGV[3], "schedule_type", ARGV[5], "schedule_meta", ARGV[6], "max_times", ARGV[7], "count", 1, "exclusive", ARGV[9])
+redis.call("HSET", KEYS[1], "payload", ARGV[3], "schedule_type", ARGV[5], "schedule_meta", ARGV[6], "max_times", ARGV[7], "count", 1, "exclusive", ARGV[9], "retry", ARGV[10])
 
 redis.call("SADD", KEYS[2], ARGV[1])
 

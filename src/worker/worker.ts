@@ -7,6 +7,7 @@ import * as path from "path";
 import type { ScheduleMap } from "../index";
 import createDebug from "debug";
 import { EggTimer } from "./egg-timer";
+import { computeTimestampForNextRetry } from "./retry";
 
 const debug = createDebug("owl:worker");
 
@@ -30,7 +31,8 @@ declare module "ioredis" {
           schedule_meta: string,
           count: string,
           max_times: string,
-          exclusive: "true" | "false"
+          exclusive: "true" | "false",
+          retry: string
         ]
       | null
       | -1
@@ -55,7 +57,7 @@ export interface ProcessorMeta {
   dontReschedule(): void;
 }
 export type Processor = (
-  job: Job,
+  job: Readonly<Job>,
   processorMeta: ProcessorMeta
 ) => Promise<void>;
 export type OnError = (job: Job, error: Error) => void;
@@ -183,8 +185,10 @@ export class Worker implements Closable {
         count,
         max_times,
         exclusive,
+        retryJSON = "[]",
       ] = result;
       const runAt = new Date(+runAtTimestamp);
+      const retry = JSON.parse(retryJSON) as number[];
 
       const job: Job = {
         queue,
@@ -200,6 +204,7 @@ export class Worker implements Closable {
               times: max_times ? +max_times : undefined,
             }
           : undefined,
+        retry,
       };
 
       let dontReschedule = false;
@@ -214,18 +219,27 @@ export class Worker implements Closable {
       } catch (error) {
         debug(`requestNextJobs(): job #${id} - failed`);
 
+        const isRetryable = !!computeTimestampForNextRetry(
+          runAt,
+          retry,
+          +count
+        );
+
+        const event = isRetryable ? "retry" : "fail";
         const pipeline = this.redis.pipeline();
 
         const errorString = encodeURIComponent(error);
 
-        pipeline.publish("fail", `${queue}:${id}:${errorString}`);
-        pipeline.publish(queue, `fail:${id}:${errorString}`);
-        pipeline.publish(`${queue}:${id}`, `fail:${errorString}`);
-        pipeline.publish(`${queue}:${id}:fail`, errorString);
+        pipeline.publish(event, `${queue}:${id}:${errorString}`);
+        pipeline.publish(queue, `${event}:${id}:${errorString}`);
+        pipeline.publish(`${queue}:${id}`, `${event}:${errorString}`);
+        pipeline.publish(`${queue}:${id}:${event}`, errorString);
 
         await pipeline.exec();
 
-        this.onError?.(job, error);
+        if (!isRetryable) {
+          this.onError?.(job, error);
+        }
       } finally {
         let nextExecDate: number | undefined = undefined;
 
@@ -239,6 +253,10 @@ export class Worker implements Closable {
 
         if (dontReschedule) {
           nextExecDate = undefined;
+        }
+
+        if (retry.length) {
+          nextExecDate = computeTimestampForNextRetry(runAt, retry, +count);
         }
 
         await this.redis.acknowledge(
