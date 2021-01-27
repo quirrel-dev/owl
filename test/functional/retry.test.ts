@@ -69,9 +69,9 @@ function test(backend: "Redis" | "In-Memory") {
 
         const executionDates = env.jobs.map(([executionDate]) => executionDate);
         expect(executionDates).to.have.length(4);
-        expect(executionDates[1] - executionDates[0]).to.be.within(5, 15);
-        expect(executionDates[2] - executionDates[0]).to.be.within(90, 110);
-        expect(executionDates[3] - executionDates[0]).to.be.within(190, 210);
+        expect(executionDates[1] - executionDates[0]).to.be.within(5, 20);
+        expect(executionDates[2] - executionDates[0]).to.be.within(80, 120);
+        expect(executionDates[3] - executionDates[0]).to.be.within(180, 220);
 
         const counts = env.jobs.map(([, job]) => job.count);
         expect(counts).to.eql([1, 2, 3, 4]);
