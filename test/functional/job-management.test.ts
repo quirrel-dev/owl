@@ -25,6 +25,7 @@ function test(backend: "Redis" | "In-Memory") {
           count: 1,
           schedule: undefined,
           exclusive: false,
+          retry: [],
         });
 
         await env.producer.enqueue({
@@ -48,6 +49,7 @@ function test(backend: "Redis" | "In-Memory") {
             schedule: undefined,
             count: 1,
             exclusive: false,
+            retry: [],
           },
           {
             queue: "producer-scan-queue",
@@ -57,6 +59,7 @@ function test(backend: "Redis" | "In-Memory") {
             schedule: undefined,
             count: 1,
             exclusive: false,
+            retry: [],
           },
         ]);
 
@@ -86,6 +89,7 @@ function test(backend: "Redis" | "In-Memory") {
           schedule: undefined,
           count: 1,
           exclusive: false,
+          retry: [],
         });
       });
 

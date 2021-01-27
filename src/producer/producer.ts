@@ -21,7 +21,8 @@ declare module "ioredis" {
       schedule_meta: string | undefined,
       times: number | undefined,
       overwrite: boolean,
-      exclusive: boolean
+      exclusive: boolean,
+      retryIntervals: string
     ): Promise<0 | 1>;
 
     delete(
@@ -72,6 +73,12 @@ export class Producer<ScheduleType extends string> implements Closable {
       job.runAt = new Date();
     }
 
+    const { retry = [], schedule } = job;
+
+    if (retry.length && schedule) {
+      throw new Error("retry and schedule cannot be used together");
+    }
+
     await this.redis.schedule(
       `jobs:${job.queue}:${job.id}`,
       `queues:${job.queue}`,
@@ -84,7 +91,8 @@ export class Producer<ScheduleType extends string> implements Closable {
       job.schedule?.meta,
       job.schedule?.times,
       job.override ?? false,
-      job.exclusive ?? false
+      job.exclusive ?? false,
+      JSON.stringify(retry)
     );
     debug("job #%o: enqueued", job.id);
 
@@ -96,6 +104,7 @@ export class Producer<ScheduleType extends string> implements Closable {
       runAt: job.runAt,
       exclusive: job.exclusive ?? false,
       schedule: job.schedule,
+      retry,
     };
   }
 
@@ -139,9 +148,9 @@ export class Producer<ScheduleType extends string> implements Closable {
 
     return {
       newCursor: +newCursor,
-      jobs: (await this.findJobs(jobIds)).filter((j) => !!j) as Job<
-        ScheduleType
-      >[],
+      jobs: (await this.findJobs(jobIds)).filter(
+        (j) => !!j
+      ) as Job<ScheduleType>[],
     };
   }
 
@@ -178,6 +187,7 @@ export class Producer<ScheduleType extends string> implements Closable {
         count,
         max_times,
         exclusive,
+        retry,
       } = hgetallResult;
 
       if (typeof payload === "undefined") {
@@ -201,6 +211,7 @@ export class Producer<ScheduleType extends string> implements Closable {
             }
           : undefined,
         count: +count,
+        retry: JSON.parse(retry),
       });
     }
 

@@ -53,7 +53,12 @@ export function makeProducerEnv(inMemory = false) {
   return env;
 }
 
-export function makeWorkerEnv(inMemory = false) {
+type WorkerFailPredicate = (job: Job<string>) => boolean;
+
+export function makeWorkerEnv(
+  inMemory = false,
+  fail: WorkerFailPredicate = (job: Job<string>) => false
+) {
   const producerEnv = makeProducerEnv(inMemory);
 
   const producerSetup = producerEnv.setup;
@@ -62,19 +67,30 @@ export function makeWorkerEnv(inMemory = false) {
   const workerEnv: typeof producerEnv & {
     worker: Worker;
     jobs: [number, Job][];
+    errors: [Job, Error][];
   } = producerEnv as any;
 
   workerEnv.worker = null as any;
   workerEnv.jobs = [];
+  workerEnv.errors = [];
 
   workerEnv.setup = async function setup() {
     await producerSetup();
 
     workerEnv.jobs = [];
 
-    workerEnv.worker = producerEnv.owl.createWorker(async (job) => {
-      workerEnv.jobs.push([Date.now(), job]);
-    });
+    workerEnv.worker = producerEnv.owl.createWorker(
+      async (job) => {
+        workerEnv.jobs.push([Date.now(), job]);
+
+        if (fail(job)) {
+          throw new Error("failing!");
+        }
+      },
+      (job, error) => {
+        workerEnv.errors.push([job, error]);
+      }
+    );
   };
 
   workerEnv.teardown = async function teardown() {
@@ -85,8 +101,8 @@ export function makeWorkerEnv(inMemory = false) {
   return workerEnv;
 }
 
-export function makeActivityEnv(inMemory = false) {
-  const workerEnv = makeWorkerEnv(inMemory);
+export function makeActivityEnv(inMemory = false, fail?: WorkerFailPredicate) {
+  const workerEnv = makeWorkerEnv(inMemory, fail);
 
   const workerSetup = workerEnv.setup;
   const workerTeardown = workerEnv.teardown;
