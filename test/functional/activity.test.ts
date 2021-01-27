@@ -58,7 +58,8 @@ function test(backend: "Redis" | "In-Memory") {
             runAt: currentDate,
             count: 1,
             schedule: undefined,
-            exclusive: false
+            exclusive: false,
+            retry: [],
           },
         },
         {
@@ -70,7 +71,8 @@ function test(backend: "Redis" | "In-Memory") {
             runAt: new Date(9999999999999),
             count: 1,
             schedule: undefined,
-            exclusive: true
+            exclusive: true,
+            retry: [],
           },
         },
         {
@@ -82,6 +84,7 @@ function test(backend: "Redis" | "In-Memory") {
             count: 1,
             runAt: currentDate,
             exclusive: false,
+            retry: [],
             schedule: {
               type: "every",
               meta: "10",
