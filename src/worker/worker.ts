@@ -32,7 +32,7 @@ declare module "ioredis" {
           count: string,
           max_times: string,
           exclusive: "true" | "false",
-          retry: string
+          retry: string | null
         ]
       | null
       | -1
@@ -185,10 +185,10 @@ export class Worker implements Closable {
         count,
         max_times,
         exclusive,
-        retryJSON = "[]",
+        retryJSON,
       ] = result;
       const runAt = new Date(+runAtTimestamp);
-      const retry = JSON.parse(retryJSON) as number[];
+      const retry = JSON.parse(retryJSON ?? "[]") as number[];
 
       const job: Job = {
         queue,
