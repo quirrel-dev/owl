@@ -47,7 +47,7 @@
   },
   "dependencies": {
     "debug": "^4.3.1",
-    "ioredis": "^4.17.3",
+    "ioredis": "^4.22.0",
     "ioredis-mock": "^5.2.1"
   }
 }
