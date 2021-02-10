@@ -211,7 +211,7 @@ export class Producer<ScheduleType extends string> implements Closable {
             }
           : undefined,
         count: +count,
-        retry: JSON.parse(retry),
+        retry: JSON.parse(retry ?? "[]"),
       });
     }
 
