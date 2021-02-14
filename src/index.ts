@@ -1,7 +1,8 @@
 import { Redis } from "ioredis";
 import { Producer } from "./producer/producer";
-import { OnError, Processor, Worker } from "./worker/worker";
+import { Processor, Worker } from "./worker/worker";
 import { Activity, OnActivity, SubscriptionOptions } from "./activity/activity";
+import { OnError } from "./shared/acknowledger";
 
 export { Job, JobEnqueue } from "./Job";
 export { Closable } from "./Closable";
@@ -14,15 +15,21 @@ export type ScheduleMap<ScheduleType extends string> = Record<
 export default class Owl<ScheduleType extends string> {
   constructor(
     private readonly redisFactory: () => Redis,
-    private readonly scheduleMap: ScheduleMap<ScheduleType> = {} as any
+    private readonly scheduleMap: ScheduleMap<ScheduleType> = {} as any,
+    private readonly onError?: OnError
   ) {}
 
-  public createWorker(processor: Processor, onError?: OnError) {
-    return new Worker(this.redisFactory, this.scheduleMap, processor, onError);
+  public createWorker(processor: Processor) {
+    return new Worker(
+      this.redisFactory,
+      this.scheduleMap,
+      processor,
+      this.onError
+    );
   }
 
   public createProducer() {
-    return new Producer<ScheduleType>(this.redisFactory);
+    return new Producer<ScheduleType>(this.redisFactory, this.onError);
   }
 
   public createActivity(

@@ -4,6 +4,7 @@ import { Job, JobEnqueue } from "../Job";
 import * as fs from "fs";
 import * as path from "path";
 import createDebug from "debug";
+import { Acknowledger, OnError } from "../shared/acknowledger";
 
 const debug = createDebug("owl:producer");
 
@@ -45,7 +46,10 @@ declare module "ioredis" {
 
 export class Producer<ScheduleType extends string> implements Closable {
   private readonly redis;
-  constructor(redisFactory: () => Redis) {
+
+  public readonly acknowledger;
+
+  constructor(redisFactory: () => Redis, onError?: OnError) {
     this.redis = redisFactory();
 
     this.redis.defineCommand("schedule", {
@@ -62,6 +66,8 @@ export class Producer<ScheduleType extends string> implements Closable {
       lua: fs.readFileSync(path.join(__dirname, "delete.lua")).toString(),
       numberOfKeys: 3,
     });
+
+    this.acknowledger = new Acknowledger(this.redis, onError);
   }
 
   public async enqueue(

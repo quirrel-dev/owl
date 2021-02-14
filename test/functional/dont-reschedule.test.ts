@@ -7,7 +7,9 @@ function test(backend: "Redis" | "In-Memory") {
     await producerEnv.setup();
 
     const worker = producerEnv.owl.createWorker(async (job, meta) => {
-      meta.dontReschedule();
+      worker.acknowledger.acknowledge(meta, {
+        dontReschedule: true,
+      });
     });
 
     await producerEnv.producer.enqueue({
