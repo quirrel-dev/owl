@@ -17,7 +17,7 @@
             if undefined / empty string, job will be deleted
 ]]
 
-redis.call("SREM", KEYS[3], ARGV[2] .. ":" .. ARGV[1])
+redis.call("ZREM", KEYS[3], ARGV[2] .. ":" .. ARGV[1])
 
 -- publishes "acknowledged" to "<queue>:<id>"
 redis.call("PUBLISH", ARGV[2] .. ":" .. ARGV[1], "acknowledged")

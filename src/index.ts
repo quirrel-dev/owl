@@ -3,6 +3,7 @@ import { Producer } from "./producer/producer";
 import { Processor, Worker } from "./worker/worker";
 import { Activity, OnActivity, SubscriptionOptions } from "./activity/activity";
 import { OnError } from "./shared/acknowledger";
+import { migrate } from "./shared/migrator";
 
 export { Job, JobEnqueue } from "./Job";
 export { Closable } from "./Closable";
@@ -37,5 +38,11 @@ export default class Owl<ScheduleType extends string> {
     options: SubscriptionOptions = {}
   ) {
     return new Activity<ScheduleType>(this.redisFactory, onEvent, options);
+  }
+
+  public async runMigrations() {
+    const client = this.redisFactory();
+    await migrate(client);
+    client.disconnect();
   }
 }

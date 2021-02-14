@@ -72,7 +72,8 @@ end
 
 redis.call("HINCRBY", KEYS[4], queue, 1)
 
-redis.call("SADD", KEYS[2], queueAndId)
+local time = redis.call("TIME")[1]
+redis.call("ZADD", KEYS[2], time, queueAndId)
 
 -- publishes "requested" to "<queue>:<id>"
 redis.call("PUBLISH", queue .. ":" .. id, "requested")
