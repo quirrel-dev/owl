@@ -3,34 +3,34 @@ import { delay, makeProducerEnv } from "./support";
 
 function testAgainst(backend: "Redis" | "In-Memory") {
   describe(backend + " > stale-check", () => {
-    const owl = makeProducerEnv(backend === "In-Memory", {
+    const env = makeProducerEnv(backend === "In-Memory", {
       staleChecker: {
         interval: 60 * 1000,
         staleAfter: 1000,
       },
     });
-    beforeEach(owl.setup);
-    afterEach(owl.teardown);
+    beforeEach(env.setup);
+    afterEach(env.teardown);
 
     it("emits errors for stalling jobs", async () => {
-      const worker = owl.owl.createWorker(async () => {
+      const worker = env.owl.createWorker(async () => {
         // happily takes jobs, but never acknowledges any of them
         // simulating a dying worker
       });
 
-      await owl.producer.enqueue({
+      await env.producer.enqueue({
         id: "stalling-job",
         payload: "i am stalling, just like susanne",
         queue: "stally-stall",
       });
 
-      await owl.producer.staleChecker.check();
-      expect(owl.errors).to.deep.equal([]);
+      await env.producer.staleChecker.check();
+      expect(env.errors).to.deep.equal([]);
 
       await delay(1500);
 
-      await owl.producer.staleChecker.check();
-      expect(owl.errors).to.deep.equal([
+      await env.producer.staleChecker.check();
+      expect(env.errors).to.deep.equal([
         [
           {
             jobId: "stalling-job",
@@ -46,27 +46,27 @@ function testAgainst(backend: "Redis" | "In-Memory") {
 
     it("reschedules jobs with retry", async () => {
       let calls = 0;
-      const worker = owl.owl.createWorker(async (job, ack) => {
+      const worker = env.owl.createWorker(async (job, ack) => {
         calls++;
         if (job.count > 1) {
           await worker.acknowledger.acknowledge(ack);
         }
       });
 
-      await owl.producer.enqueue({
+      await env.producer.enqueue({
         id: "retryable-stalling-job",
         payload: "i am stalling, just like susanne",
         queue: "retry-stally-stall",
         retry: [100],
       });
 
-      await owl.producer.staleChecker.check();
-      expect(owl.errors).to.deep.equal([]);
+      await env.producer.staleChecker.check();
+      expect(env.errors).to.deep.equal([]);
 
       await delay(1100);
 
-      await owl.producer.staleChecker.check();
-      expect(owl.errors).to.deep.equal([]);
+      await env.producer.staleChecker.check();
+      expect(env.errors).to.deep.equal([]);
 
       await delay(300);
 
@@ -76,25 +76,25 @@ function testAgainst(backend: "Redis" | "In-Memory") {
     });
 
     it("does not emit errors if everything is fine", async () => {
-      const worker = owl.owl.createWorker(async (job, ack) => {
+      const worker = env.owl.createWorker(async (job, ack) => {
         setTimeout(() => {
           worker.acknowledger.acknowledge(ack);
         }, 500);
       });
 
-      await owl.producer.enqueue({
+      await env.producer.enqueue({
         id: "non-stalling-job",
         payload: "i am not stalling",
         queue: "unstally-stall",
       });
 
-      await owl.producer.staleChecker.check();
-      expect(owl.errors).to.deep.equal([]);
+      await env.producer.staleChecker.check();
+      expect(env.errors).to.deep.equal([]);
 
       await delay(1500);
 
-      await owl.producer.staleChecker.check();
-      expect(owl.errors).to.deep.equal([]);
+      await env.producer.staleChecker.check();
+      expect(env.errors).to.deep.equal([]);
 
       await worker.close();
     });
