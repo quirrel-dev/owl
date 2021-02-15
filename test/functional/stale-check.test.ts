@@ -44,6 +44,37 @@ function testAgainst(backend: "Redis" | "In-Memory") {
       await worker.close();
     });
 
+    it("reschedules jobs with retry", async () => {
+      let calls = 0;
+      const worker = owl.owl.createWorker(async (job, ack) => {
+        calls++;
+        if (job.count > 1) {
+          await worker.acknowledger.acknowledge(ack);
+        }
+      });
+
+      await owl.producer.enqueue({
+        id: "retryable-stalling-job",
+        payload: "i am stalling, just like susanne",
+        queue: "retry-stally-stall",
+        retry: [100],
+      });
+
+      await owl.producer.staleChecker.check();
+      expect(owl.errors).to.deep.equal([]);
+
+      await delay(1100);
+
+      await owl.producer.staleChecker.check();
+      expect(owl.errors).to.deep.equal([]);
+
+      await delay(300);
+
+      expect(calls).to.eq(2);
+
+      await worker.close();
+    });
+
     it("does not emit errors if everything is fine", async () => {
       const worker = owl.owl.createWorker(async (job, ack) => {
         setTimeout(() => {
