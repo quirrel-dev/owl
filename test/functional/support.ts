@@ -60,6 +60,7 @@ export function makeProducerEnv(
     }
 
     env.producer = env.owl.createProducer();
+    env.errors = [];
   }
 
   async function teardown() {

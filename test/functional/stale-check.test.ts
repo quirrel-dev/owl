@@ -12,8 +12,8 @@ function testAgainst(backend: "Redis" | "In-Memory") {
     beforeEach(owl.setup);
     afterEach(owl.teardown);
 
-    it("works", async () => {
-      owl.owl.createWorker(async () => {
+    it("emits errors for stalling jobs", async () => {
+      const worker = owl.owl.createWorker(async () => {
         // happily takes jobs, but never acknowledges any of them
         // simulating a dying worker
       });
@@ -40,6 +40,32 @@ function testAgainst(backend: "Redis" | "In-Memory") {
           "Job Timed Out",
         ],
       ]);
+
+      await worker.close();
+    });
+
+    it("does not emit errors if everything is fine", async () => {
+      const worker = owl.owl.createWorker(async (job, ack) => {
+        setTimeout(() => {
+          worker.acknowledger.acknowledge(ack);
+        }, 500);
+      });
+
+      await owl.producer.enqueue({
+        id: "non-stalling-job",
+        payload: "i am not stalling",
+        queue: "unstally-stall",
+      });
+
+      await owl.producer.staleChecker.check();
+      expect(owl.errors).to.deep.equal([]);
+
+      await delay(1500);
+
+      await owl.producer.staleChecker.check();
+      expect(owl.errors).to.deep.equal([]);
+
+      await worker.close();
     });
   });
 }
