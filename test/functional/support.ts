@@ -1,4 +1,4 @@
-import Owl from "../../src";
+import Owl, { OwlConfig } from "../../src";
 import IORedis, { Redis } from "ioredis";
 import IORedisMock from "ioredis-mock";
 import { Producer } from "../../src/producer/producer";
@@ -11,7 +11,10 @@ export function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function makeProducerEnv(inMemory = false) {
+export function makeProducerEnv(
+  inMemory = false,
+  config?: Partial<OwlConfig<any>>
+) {
   const env: {
     redis: Redis;
     owl: Owl<"every">;
@@ -38,20 +41,22 @@ export function makeProducerEnv(inMemory = false) {
     };
     if (inMemory) {
       env.redis = new IORedisMock();
-      env.owl = new Owl(
-        () => (env.redis as any).createConnectedClient(),
+      env.owl = new Owl({
+        redisFactory: () => (env.redis as any).createConnectedClient(),
         scheduleMap,
-        onError
-      );
+        onError,
+        ...config,
+      });
     } else {
       env.redis = new IORedis(process.env.REDIS_URL);
       await env.redis.flushall();
 
-      env.owl = new Owl(
-        () => new IORedis(process.env.REDIS_URL),
+      env.owl = new Owl({
+        redisFactory: () => new IORedis(process.env.REDIS_URL),
         scheduleMap,
-        onError
-      );
+        onError,
+        ...config,
+      });
     }
 
     env.producer = env.owl.createProducer();

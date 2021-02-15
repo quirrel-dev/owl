@@ -6,19 +6,28 @@ import type { Acknowledger } from "./acknowledger";
 
 const oneMinute = 60 * 1000;
 
+export interface StaleCheckerConfig {
+  interval?: number;
+  staleAfter?: number;
+}
+
 export class StaleChecker implements Closable {
   private intervalId?: NodeJS.Timeout;
+
+  private readonly staleAfter;
 
   constructor(
     private readonly redis: Redis,
     private readonly acknowledger: Acknowledger,
     private readonly producer: Producer<any>,
-    private readonly interval = oneMinute,
-    private readonly staleAfter = 60 * oneMinute
-  ) {}
+    config: StaleCheckerConfig = {}
+  ) {
+    this.staleAfter = config.staleAfter ?? 60 * oneMinute;
 
-  public start() {
-    this.intervalId = setInterval(() => this.check(), this.interval);
+    this.intervalId = setInterval(
+      () => this.check(),
+      config.interval ?? oneMinute
+    );
   }
 
   public close() {
@@ -28,7 +37,7 @@ export class StaleChecker implements Closable {
   }
 
   private getMaxDate(now = Date.now()): number {
-    return now - this.staleAfter * 1000;
+    return now - this.staleAfter;
   }
 
   private toRedisDate(ms: number): number {
@@ -70,6 +79,10 @@ export class StaleChecker implements Closable {
       "-inf",
       this.toRedisDate(this.getMaxDate())
     );
+
+    if (staleJobDescriptors.length === 0) {
+      return;
+    }
 
     const staleJobs = await this.producer.findJobs(
       staleJobDescriptors.map(this.parseJobDescriptor)

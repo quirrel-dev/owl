@@ -4,6 +4,7 @@ import { Processor, Worker } from "./worker/worker";
 import { Activity, OnActivity, SubscriptionOptions } from "./activity/activity";
 import { OnError } from "./shared/acknowledger";
 import { migrate } from "./shared/migrator";
+import { StaleCheckerConfig } from "./shared/stale-checker";
 
 export { Job, JobEnqueue } from "./Job";
 export { Closable } from "./Closable";
@@ -13,24 +14,40 @@ export type ScheduleMap<ScheduleType extends string> = Record<
   (lastExecution: Date, scheduleMeta: string) => Date | null
 >;
 
+export interface OwlConfig<ScheduleType extends string> {
+  redisFactory: () => Redis;
+  scheduleMap?: ScheduleMap<ScheduleType>;
+  staleChecker?: StaleCheckerConfig;
+  onError?: OnError;
+}
+
 export default class Owl<ScheduleType extends string> {
-  constructor(
-    private readonly redisFactory: () => Redis,
-    private readonly scheduleMap: ScheduleMap<ScheduleType> = {} as any,
-    private readonly onError?: OnError
-  ) {}
+  private readonly redisFactory;
+  private readonly scheduleMap?: ScheduleMap<ScheduleType>;
+  private readonly staleCheckerConfig?: StaleCheckerConfig;
+  private readonly onError?;
+  constructor(config: OwlConfig<ScheduleType>) {
+    this.redisFactory = config.redisFactory;
+    this.scheduleMap = config.scheduleMap;
+    this.staleCheckerConfig = config.staleChecker;
+    this.onError = config.onError;
+  }
 
   public createWorker(processor: Processor) {
     return new Worker(
       this.redisFactory,
-      this.scheduleMap,
+      this.scheduleMap ?? {},
       processor,
       this.onError
     );
   }
 
   public createProducer() {
-    return new Producer<ScheduleType>(this.redisFactory, this.onError);
+    return new Producer<ScheduleType>(
+      this.redisFactory,
+      this.onError,
+      this.staleCheckerConfig
+    );
   }
 
   public createActivity(
