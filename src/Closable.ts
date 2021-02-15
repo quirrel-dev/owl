@@ -4,5 +4,5 @@ export interface Closable {
    * waits until all pending stuff
    * is successfully stopped.
    */
-  close(): Promise<void>;
+  close(): Promise<void> | void;
 }

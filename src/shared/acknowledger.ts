@@ -1,5 +1,5 @@
 import createDebug from "debug";
-import { Redis } from "ioredis";
+import { Pipeline, Redis } from "ioredis";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -19,6 +19,21 @@ declare module "ioredis" {
       queue: string,
       timestampToRescheduleFor: number | undefined
     ): Promise<void>;
+  }
+
+  interface Pipeline {
+    acknowledge(
+      jobTableQueueIdKey: string,
+      jobTableQueueIndex: string,
+      processingKey: string,
+      scheduledQueueKey: string,
+      blockedJobsKey: string,
+      blockedQueuesSetKey: string,
+      softBlockCounterKey: string,
+      id: string,
+      queue: string,
+      timestampToRescheduleFor: number | undefined
+    ): this;
   }
 }
 
@@ -42,14 +57,14 @@ export class Acknowledger {
     });
   }
 
-  public async reportFailure(
+  public _reportFailure(
     descriptor: AcknowledgementDescriptor,
-    error: any
+    error: any,
+    pipeline: Pipeline
   ) {
     const { timestampForNextRetry, queueId, jobId } = descriptor;
     const isRetryable = !!timestampForNextRetry;
     const event = isRetryable ? "retry" : "fail";
-    const pipeline = this.redis.pipeline();
 
     const errorString = encodeURIComponent(error);
 
@@ -58,13 +73,7 @@ export class Acknowledger {
     pipeline.publish(`${queueId}:${jobId}`, `${event}:${errorString}`);
     pipeline.publish(`${queueId}:${jobId}:${event}`, errorString);
 
-    await pipeline.exec();
-
-    if (!isRetryable) {
-      this.onError?.(descriptor, error);
-    }
-
-    await this.redis.acknowledge(
+    pipeline.acknowledge(
       `jobs:${queueId}:${jobId}`,
       `queues:${queueId}`,
       "processing",
@@ -76,6 +85,19 @@ export class Acknowledger {
       queueId,
       timestampForNextRetry
     );
+
+    if (!isRetryable) {
+      this.onError?.(descriptor, error);
+    }
+  }
+
+  public async reportFailure(
+    descriptor: AcknowledgementDescriptor,
+    error: any
+  ) {
+    const pipeline = this.redis.pipeline();
+    this._reportFailure(descriptor, error, pipeline);
+    await pipeline.exec();
   }
 
   public async acknowledge(
@@ -96,6 +118,7 @@ export class Acknowledger {
       queueId,
       options.dontReschedule ? undefined : nextExecutionDate
     );
+
     if (nextExecutionDate) {
       debug(
         `requestNextJobs(): job #${jobId} - acknowledged (next execution: ${nextExecutionDate})`

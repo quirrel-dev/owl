@@ -5,6 +5,7 @@ import * as fs from "fs";
 import * as path from "path";
 import createDebug from "debug";
 import { Acknowledger, OnError } from "../shared/acknowledger";
+import { StaleChecker } from "../shared/stale-checker";
 
 const debug = createDebug("owl:producer");
 
@@ -48,6 +49,7 @@ export class Producer<ScheduleType extends string> implements Closable {
   private readonly redis;
 
   public readonly acknowledger;
+  private readonly staleChecker: StaleChecker;
 
   constructor(redisFactory: () => Redis, onError?: OnError) {
     this.redis = redisFactory();
@@ -68,6 +70,7 @@ export class Producer<ScheduleType extends string> implements Closable {
     });
 
     this.acknowledger = new Acknowledger(this.redis, onError);
+    this.staleChecker = new StaleChecker(this.redis, this.acknowledger, this);
   }
 
   public async enqueue(
@@ -160,7 +163,7 @@ export class Producer<ScheduleType extends string> implements Closable {
     };
   }
 
-  private async findJobs(
+  public async findJobs(
     ids: { queue: string; id: string }[]
   ): Promise<(Job<ScheduleType> | null)[]> {
     const pipeline = this.redis.pipeline();
@@ -267,5 +270,6 @@ export class Producer<ScheduleType extends string> implements Closable {
 
   async close() {
     await this.redis.quit();
+    this.staleChecker.close();
   }
 }
