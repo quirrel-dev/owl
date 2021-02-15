@@ -1,29 +1,27 @@
 import { Redis } from "ioredis";
+import fs from "fs";
+import path from "path";
 
 interface Migration {
   name: string;
   run(redis: Redis): Promise<void>;
 }
 
-export const processingToSortedSet: Migration = {
-  name: "processingToSortedSet",
-  async run(redis) {
-    await redis.eval(
-      `
-local members = redis.call("SMEMBERS", "processing")
-redis.call("DEL", "processing")
+function luaScriptMigration(scriptName: string): Migration {
+  return {
+    name: scriptName,
+    async run(redis) {
+      const file = fs
+        .readFileSync(path.join(__dirname, `${scriptName}.lua`))
+        .toString();
+      await redis.eval(file, 0);
+    },
+  };
+}
 
-local time = redis.call("TIME")[1]
-
-for i = 1, #members, 1
-do
-  redis.call("ZADD", "processing", time, members[i])
-end
-`,
-      0
-    );
-  },
-};
+export const processingToSortedSet = luaScriptMigration(
+  "processingToSortedSet"
+);
 
 const migrations = [processingToSortedSet];
 
