@@ -4,6 +4,7 @@ import { Job, JobEnqueue } from "../Job";
 import * as fs from "fs";
 import * as path from "path";
 import createDebug from "debug";
+import { decodeRedisKey, encodeRedisKey } from "../encodeRedisKey";
 
 const debug = createDebug("owl:producer");
 
@@ -80,11 +81,11 @@ export class Producer<ScheduleType extends string> implements Closable {
     }
 
     await this.redis.schedule(
-      `jobs:${encodeURIComponent(job.queue)}:${encodeURIComponent(job.id)}`,
-      `queues:${encodeURIComponent(job.queue)}`,
+      `jobs:${encodeRedisKey(job.queue)}:${encodeRedisKey(job.id)}`,
+      `queues:${encodeRedisKey(job.queue)}`,
       "queue",
-      encodeURIComponent(job.id),
-      encodeURIComponent(job.queue),
+      encodeRedisKey(job.id),
+      encodeRedisKey(job.queue),
       job.payload,
       +job.runAt,
       job.schedule?.type,
@@ -114,7 +115,7 @@ export class Producer<ScheduleType extends string> implements Closable {
     count = 100
   ): Promise<{ newCursor: number; jobs: Job<ScheduleType>[] }> {
     const [newCursor, jobIds] = await this.redis.sscan(
-      `queues:${encodeURIComponent(queue)}`,
+      `queues:${encodeRedisKey(queue)}`,
       cursor,
       "COUNT",
       count
@@ -124,7 +125,7 @@ export class Producer<ScheduleType extends string> implements Closable {
       newCursor: +newCursor,
       jobs: (
         await this.findJobs(
-          jobIds.map(decodeURIComponent).map((id) => ({ id, queue }))
+          jobIds.map(decodeRedisKey).map((id) => ({ id, queue }))
         )
       ).filter((j) => !!j) as Job<ScheduleType>[],
     };
@@ -138,14 +139,14 @@ export class Producer<ScheduleType extends string> implements Closable {
     const [newCursor, jobIdKeys] = await this.redis.scan(
       cursor,
       "MATCH",
-      `jobs:${encodeURIComponent(queuePattern)}:*`,
+      `jobs:${encodeRedisKey(queuePattern)}:*`,
       "COUNT",
       count
     );
 
     const jobIds = jobIdKeys.map((jobIdKey) => {
       const [, queue, id] = jobIdKey.split(":");
-      return { queue: decodeURIComponent(queue), id: decodeURIComponent(id) };
+      return { queue: decodeRedisKey(queue), id: decodeRedisKey(id) };
     });
 
     return {
@@ -163,11 +164,11 @@ export class Producer<ScheduleType extends string> implements Closable {
 
     for (const { queue, id } of ids) {
       pipeline.hgetall(
-        `jobs:${encodeURIComponent(queue)}:${encodeURIComponent(id)}`
+        `jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`
       );
       pipeline.zscore(
         "queue",
-        `${encodeURIComponent(queue)}:${encodeURIComponent(id)}`
+        `${encodeRedisKey(queue)}:${encodeRedisKey(id)}`
       );
     }
 
@@ -178,8 +179,8 @@ export class Producer<ScheduleType extends string> implements Closable {
       const [hgetallErr, hgetallResult] = redisResults[i];
       const [zscoreErr, zscoreResult] = redisResults[i + 1];
       const { id: _id, queue: _queue } = ids[i / 2];
-      const id = decodeURIComponent(_id);
-      const queue = decodeURIComponent(_queue);
+      const id = decodeRedisKey(_id);
+      const queue = decodeRedisKey(_queue);
 
       if (hgetallErr) {
         throw hgetallErr;
@@ -237,11 +238,11 @@ export class Producer<ScheduleType extends string> implements Closable {
 
   public async delete(queue: string, id: string) {
     const result = await this.redis.delete(
-      `jobs:${encodeURIComponent(queue)}:${encodeURIComponent(id)}`,
-      `queues:${encodeURIComponent(queue)}`,
+      `jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`,
+      `queues:${encodeRedisKey(queue)}`,
       "queue",
-      encodeURIComponent(id),
-      encodeURIComponent(queue)
+      encodeRedisKey(id),
+      encodeRedisKey(queue)
     );
 
     switch (result) {
@@ -254,10 +255,10 @@ export class Producer<ScheduleType extends string> implements Closable {
 
   public async invoke(queue: string, id: string) {
     const result = await this.redis.invoke(
-      `jobs:${encodeURIComponent(queue)}:${encodeURIComponent(id)}`,
+      `jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`,
       "queue",
-      encodeURIComponent(id),
-      encodeURIComponent(queue),
+      encodeRedisKey(id),
+      encodeRedisKey(queue),
       Date.now()
     );
     switch (result) {

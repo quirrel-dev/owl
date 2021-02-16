@@ -8,6 +8,7 @@ import type { ScheduleMap } from "../index";
 import createDebug from "debug";
 import { EggTimer } from "./egg-timer";
 import { computeTimestampForNextRetry } from "./retry";
+import { decodeRedisKey, encodeRedisKey } from "../encodeRedisKey";
 
 const debug = createDebug("owl:worker");
 
@@ -187,8 +188,8 @@ export class Worker implements Closable {
         exclusive,
         retryJSON,
       ] = result;
-      const queue = decodeURIComponent(_queue);
-      const id = decodeURIComponent(_id);
+      const queue = decodeRedisKey(_queue);
+      const id = decodeRedisKey(_id);
       const runAt = new Date(+runAtTimestamp);
       const retry = JSON.parse(retryJSON ?? "[]") as number[];
 
@@ -232,8 +233,8 @@ export class Worker implements Closable {
 
         const errorString = encodeURIComponent(error);
 
-        const _queue = encodeURIComponent(queue);
-        const _id = encodeURIComponent(id);
+        const _queue = encodeRedisKey(queue);
+        const _id = encodeRedisKey(id);
 
         pipeline.publish(event, `${_queue}:${_id}:${errorString}`);
         pipeline.publish(_queue, `${event}:${_id}:${errorString}`);
@@ -265,15 +266,15 @@ export class Worker implements Closable {
         }
 
         await this.redis.acknowledge(
-          `jobs:${encodeURIComponent(queue)}:${encodeURIComponent(id)}`,
-          `queues:${encodeURIComponent(queue)}`,
+          `jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`,
+          `queues:${encodeRedisKey(queue)}`,
           "processing",
           "queue",
-          `blocked:${encodeURIComponent(queue)}`,
+          `blocked:${encodeRedisKey(queue)}`,
           "blocked-queues",
           "soft-block",
-          encodeURIComponent(id),
-          encodeURIComponent(queue),
+          encodeRedisKey(id),
+          encodeRedisKey(queue),
           nextExecDate
         );
         if (nextExecDate) {
