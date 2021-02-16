@@ -102,6 +102,14 @@ export class Activity<ScheduleType extends string> implements Closable {
       );
     }
 
+    if (options.queue) {
+      options.queue = encodeURIComponent(options.queue);
+    }
+
+    if (options.id) {
+      options.id = encodeURIComponent(options.id);
+    }
+
     this.redis.psubscribe(`${options.queue ?? "*"}:${options.id ?? "*"}`);
   }
 
@@ -109,7 +117,7 @@ export class Activity<ScheduleType extends string> implements Closable {
     const [_type, ...args] = splitEvent(message, 9);
     const type = _type as OnActivityEvent["type"];
 
-    const channelParts = channel.split(":");
+    const channelParts = channel.split(":").map(decodeURIComponent);
     if (channelParts.length !== 2) {
       return;
     }
