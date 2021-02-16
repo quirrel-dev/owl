@@ -1,6 +1,6 @@
 {
   "name": "@quirrel/owl",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "A high-throughput, TypeScript-native task scheduling library that runs both on Redis and with an in-memory-mock.",
   "main": "dist/index.js",
   "files": [
