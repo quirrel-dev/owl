@@ -176,8 +176,8 @@ export class Worker implements Closable {
 
     const currentlyProcessing = (async () => {
       const [
-        queue,
-        id,
+        _queue,
+        _id,
         payload,
         runAtTimestamp,
         schedule_type,
@@ -187,6 +187,8 @@ export class Worker implements Closable {
         exclusive,
         retryJSON,
       ] = result;
+      const queue = decodeURIComponent(_queue);
+      const id = decodeURIComponent(_id);
       const runAt = new Date(+runAtTimestamp);
       const retry = JSON.parse(retryJSON ?? "[]") as number[];
 
@@ -230,10 +232,13 @@ export class Worker implements Closable {
 
         const errorString = encodeURIComponent(error);
 
-        pipeline.publish(event, `${queue}:${id}:${errorString}`);
-        pipeline.publish(queue, `${event}:${id}:${errorString}`);
-        pipeline.publish(`${queue}:${id}`, `${event}:${errorString}`);
-        pipeline.publish(`${queue}:${id}:${event}`, errorString);
+        const _queue = encodeURIComponent(queue);
+        const _id = encodeURIComponent(id);
+
+        pipeline.publish(event, `${_queue}:${_id}:${errorString}`);
+        pipeline.publish(_queue, `${event}:${_id}:${errorString}`);
+        pipeline.publish(`${_queue}:${_id}`, `${event}:${errorString}`);
+        pipeline.publish(`${_queue}:${_id}:${event}`, errorString);
 
         await pipeline.exec();
 
@@ -260,15 +265,15 @@ export class Worker implements Closable {
         }
 
         await this.redis.acknowledge(
-          `jobs:${queue}:${id}`,
-          `queues:${queue}`,
+          `jobs:${encodeURIComponent(queue)}:${encodeURIComponent(id)}`,
+          `queues:${encodeURIComponent(queue)}`,
           "processing",
           "queue",
-          `blocked:${queue}`,
+          `blocked:${encodeURIComponent(queue)}`,
           "blocked-queues",
           "soft-block",
-          id,
-          queue,
+          encodeURIComponent(id),
+          encodeURIComponent(queue),
           nextExecDate
         );
         if (nextExecDate) {
