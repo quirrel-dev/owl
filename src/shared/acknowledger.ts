@@ -2,6 +2,7 @@ import createDebug from "debug";
 import { Pipeline, Redis } from "ioredis";
 import * as fs from "fs";
 import * as path from "path";
+import { encodeRedisKey } from "../encodeRedisKey";
 
 const debug = createDebug("owl:acknowledger");
 
@@ -68,21 +69,24 @@ export class Acknowledger {
 
     const errorString = encodeURIComponent(error);
 
-    pipeline.publish(event, `${queueId}:${jobId}:${errorString}`);
-    pipeline.publish(queueId, `${event}:${jobId}:${errorString}`);
-    pipeline.publish(`${queueId}:${jobId}`, `${event}:${errorString}`);
-    pipeline.publish(`${queueId}:${jobId}:${event}`, errorString);
+    const _queueId = encodeRedisKey(queueId);
+    const _jobId = encodeRedisKey(jobId);
+
+    pipeline.publish(event, `${_queueId}:${_jobId}:${errorString}`);
+    pipeline.publish(_queueId, `${event}:${_jobId}:${errorString}`);
+    pipeline.publish(`${_queueId}:${_jobId}`, `${event}:${errorString}`);
+    pipeline.publish(`${_queueId}:${_jobId}:${event}`, errorString);
 
     pipeline.acknowledge(
-      `jobs:${queueId}:${jobId}`,
-      `queues:${queueId}`,
+      `jobs:${_queueId}:${_jobId}`,
+      `queues:${_queueId}`,
       "processing",
       "queue",
-      `blocked:${queueId}`,
+      `blocked:${_queueId}`,
       "blocked-queues",
       "soft-block",
-      jobId,
-      queueId,
+      _jobId,
+      _queueId,
       timestampForNextRetry
     );
 
@@ -107,15 +111,15 @@ export class Acknowledger {
     const { queueId, jobId, nextExecutionDate } = descriptor;
 
     await this.redis.acknowledge(
-      `jobs:${queueId}:${jobId}`,
-      `queues:${queueId}`,
+      `jobs:${encodeRedisKey(queueId)}:${encodeRedisKey(jobId)}`,
+      `queues:${encodeRedisKey(queueId)}`,
       "processing",
       "queue",
-      `blocked:${queueId}`,
+      `blocked:${encodeRedisKey(queueId)}`,
       "blocked-queues",
       "soft-block",
-      jobId,
-      queueId,
+      encodeRedisKey(jobId),
+      encodeRedisKey(queueId),
       options.dontReschedule ? undefined : nextExecutionDate
     );
 

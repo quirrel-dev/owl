@@ -6,6 +6,7 @@ import * as path from "path";
 import createDebug from "debug";
 import { Acknowledger, OnError } from "../shared/acknowledger";
 import { StaleChecker, StaleCheckerConfig } from "../shared/stale-checker";
+import { decodeRedisKey, encodeRedisKey } from "../encodeRedisKey";
 
 const debug = createDebug("owl:producer");
 
@@ -98,11 +99,11 @@ export class Producer<ScheduleType extends string> implements Closable {
     }
 
     await this.redis.schedule(
-      `jobs:${job.queue}:${job.id}`,
-      `queues:${job.queue}`,
+      `jobs:${encodeRedisKey(job.queue)}:${encodeRedisKey(job.id)}`,
+      `queues:${encodeRedisKey(job.queue)}`,
       "queue",
-      job.id,
-      job.queue,
+      encodeRedisKey(job.id),
+      encodeRedisKey(job.queue),
       job.payload,
       +job.runAt,
       job.schedule?.type,
@@ -132,7 +133,7 @@ export class Producer<ScheduleType extends string> implements Closable {
     count = 100
   ): Promise<{ newCursor: number; jobs: Job<ScheduleType>[] }> {
     const [newCursor, jobIds] = await this.redis.sscan(
-      `queues:${queue}`,
+      `queues:${encodeRedisKey(queue)}`,
       cursor,
       "COUNT",
       count
@@ -140,9 +141,11 @@ export class Producer<ScheduleType extends string> implements Closable {
 
     return {
       newCursor: +newCursor,
-      jobs: (await this.findJobs(jobIds.map((id) => ({ id, queue })))).filter(
-        (j) => !!j
-      ) as Job<ScheduleType>[],
+      jobs: (
+        await this.findJobs(
+          jobIds.map(decodeRedisKey).map((id) => ({ id, queue }))
+        )
+      ).filter((j) => !!j) as Job<ScheduleType>[],
     };
   }
 
@@ -154,14 +157,14 @@ export class Producer<ScheduleType extends string> implements Closable {
     const [newCursor, jobIdKeys] = await this.redis.scan(
       cursor,
       "MATCH",
-      `jobs:${queuePattern}:*`,
+      `jobs:${encodeRedisKey(queuePattern)}:*`,
       "COUNT",
       count
     );
 
     const jobIds = jobIdKeys.map((jobIdKey) => {
       const [, queue, id] = jobIdKey.split(":");
-      return { queue, id };
+      return { queue: decodeRedisKey(queue), id: decodeRedisKey(id) };
     });
 
     return {
@@ -178,8 +181,13 @@ export class Producer<ScheduleType extends string> implements Closable {
     const pipeline = this.redis.pipeline();
 
     for (const { queue, id } of ids) {
-      pipeline.hgetall(`jobs:${queue}:${id}`);
-      pipeline.zscore("queue", `${queue}:${id}`);
+      pipeline.hgetall(
+        `jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`
+      );
+      pipeline.zscore(
+        "queue",
+        `${encodeRedisKey(queue)}:${encodeRedisKey(id)}`
+      );
     }
 
     const jobResults: (Job<ScheduleType> | null)[] = [];
@@ -188,7 +196,9 @@ export class Producer<ScheduleType extends string> implements Closable {
     for (let i = 0; i < redisResults.length; i += 2) {
       const [hgetallErr, hgetallResult] = redisResults[i];
       const [zscoreErr, zscoreResult] = redisResults[i + 1];
-      const { id, queue } = ids[i / 2];
+      const { id: _id, queue: _queue } = ids[i / 2];
+      const id = decodeRedisKey(_id);
+      const queue = decodeRedisKey(_queue);
 
       if (hgetallErr) {
         throw hgetallErr;
@@ -246,11 +256,11 @@ export class Producer<ScheduleType extends string> implements Closable {
 
   public async delete(queue: string, id: string) {
     const result = await this.redis.delete(
-      `jobs:${queue}:${id}`,
-      `queues:${queue}`,
+      `jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`,
+      `queues:${encodeRedisKey(queue)}`,
       "queue",
-      id,
-      queue
+      encodeRedisKey(id),
+      encodeRedisKey(queue)
     );
 
     switch (result) {
@@ -263,10 +273,10 @@ export class Producer<ScheduleType extends string> implements Closable {
 
   public async invoke(queue: string, id: string) {
     const result = await this.redis.invoke(
-      `jobs:${queue}:${id}`,
+      `jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`,
       "queue",
-      id,
-      queue,
+      encodeRedisKey(id),
+      encodeRedisKey(queue),
       Date.now()
     );
     switch (result) {

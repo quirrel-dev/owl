@@ -1,6 +1,7 @@
 import { Redis } from "ioredis";
 import RedisMock from "ioredis-mock";
 import { Closable } from "../Closable";
+import { decodeRedisKey, encodeRedisKey } from "../encodeRedisKey";
 import { Job } from "../Job";
 import { Producer } from "../producer/producer";
 
@@ -102,6 +103,14 @@ export class Activity<ScheduleType extends string> implements Closable {
       );
     }
 
+    if (options.queue) {
+      options.queue = encodeRedisKey(options.queue);
+    }
+
+    if (options.id) {
+      options.id = encodeRedisKey(options.id);
+    }
+
     this.redis.psubscribe(`${options.queue ?? "*"}:${options.id ?? "*"}`);
   }
 
@@ -109,7 +118,7 @@ export class Activity<ScheduleType extends string> implements Closable {
     const [_type, ...args] = splitEvent(message, 9);
     const type = _type as OnActivityEvent["type"];
 
-    const channelParts = channel.split(":");
+    const channelParts = channel.split(":").map(decodeRedisKey);
     if (channelParts.length !== 2) {
       return;
     }

@@ -13,6 +13,7 @@ import {
   Acknowledger,
   OnError,
 } from "../shared/acknowledger";
+import { decodeRedisKey, encodeRedisKey } from "../encodeRedisKey";
 
 const debug = createDebug("owl:worker");
 
@@ -167,8 +168,8 @@ export class Worker implements Closable {
 
     const currentlyProcessing = (async () => {
       const [
-        queue,
-        id,
+        _queue,
+        _id,
         payload,
         runAtTimestamp,
         schedule_type,
@@ -178,6 +179,8 @@ export class Worker implements Closable {
         exclusive,
         retryJSON,
       ] = result;
+      const queue = decodeRedisKey(_queue);
+      const id = decodeRedisKey(_id);
       const runAt = new Date(+runAtTimestamp);
       const retry = JSON.parse(retryJSON ?? "[]") as number[];
 
