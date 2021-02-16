@@ -11,14 +11,14 @@ function test(backend: "Redis" | "In-Memory") {
     describe("Producer#scanQueue", () => {
       it("returns pending jobs", async () => {
         const result = await env.producer.enqueue({
-          queue: "producer-scan-queue",
+          queue: "producer;scan;queue",
           id: "a",
           payload: "a",
           runAt: new Date("2020-10-27T07:36:56.321Z"),
         });
 
         expect(result).to.deep.eq({
-          queue: "producer-scan-queue",
+          queue: "producer;scan;queue",
           id: "a",
           payload: "a",
           runAt: new Date("2020-10-27T07:36:56.321Z"),
@@ -29,20 +29,20 @@ function test(backend: "Redis" | "In-Memory") {
         });
 
         await env.producer.enqueue({
-          queue: "producer-scan-queue",
+          queue: "producer;scan;queue",
           id: "b",
           payload: "b",
           runAt: new Date("2020-10-27T07:36:56.321Z"),
         });
 
         const { jobs, newCursor } = await env.producer.scanQueue(
-          "producer-scan-queue",
+          "producer;scan;queue",
           0
         );
 
         expect(jobs).to.have.deep.members([
           {
-            queue: "producer-scan-queue",
+            queue: "producer;scan;queue",
             id: "b",
             payload: "b",
             runAt: new Date("2020-10-27T07:36:56.321Z"),
@@ -52,7 +52,7 @@ function test(backend: "Redis" | "In-Memory") {
             retry: [],
           },
           {
-            queue: "producer-scan-queue",
+            queue: "producer;scan;queue",
             id: "a",
             payload: "a",
             runAt: new Date("2020-10-27T07:36:56.321Z"),
