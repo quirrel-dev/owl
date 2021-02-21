@@ -56,6 +56,7 @@ declare module "ioredis" {
 
 export interface ProcessorMeta {
   dontReschedule(): void;
+  nextExecDate?: Date;
 }
 export type Processor = (
   job: Readonly<Job>,
@@ -210,6 +211,16 @@ export class Worker implements Closable {
         retry,
       };
 
+      let nextExecDate: number | undefined = undefined;
+
+      if (max_times === "" || +count < +max_times) {
+        nextExecDate = this.getNextExecutionDate(
+          schedule_type,
+          schedule_meta,
+          runAt
+        );
+      }
+
       let dontReschedule = false;
       try {
         debug(`requestNextJobs(): job #${id} - started working`);
@@ -217,6 +228,7 @@ export class Worker implements Closable {
           dontReschedule() {
             dontReschedule = true;
           },
+          nextExecDate: nextExecDate ? new Date(nextExecDate) : undefined,
         });
         debug(`requestNextJobs(): job #${id} - finished working`);
       } catch (error) {
@@ -247,16 +259,6 @@ export class Worker implements Closable {
           this.onError?.(job, error);
         }
       } finally {
-        let nextExecDate: number | undefined = undefined;
-
-        if (max_times === "" || +count < +max_times) {
-          nextExecDate = this.getNextExecutionDate(
-            schedule_type,
-            schedule_meta,
-            runAt
-          );
-        }
-
         if (dontReschedule) {
           nextExecDate = undefined;
         }
