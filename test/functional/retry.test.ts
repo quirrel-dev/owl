@@ -7,7 +7,13 @@ function delay(ms: number) {
 
 function test(backend: "Redis" | "In-Memory") {
   describe(backend + " > Retry", () => {
-    const env = makeActivityEnv(backend === "In-Memory", () => true);
+    const env = makeActivityEnv(backend === "In-Memory", (job) => {
+      if (job.payload === "thou shalt succeed") {
+        return false;
+      }
+
+      return true;
+    });
 
     beforeEach(env.setup);
     afterEach(env.teardown);
@@ -75,6 +81,27 @@ function test(backend: "Redis" | "In-Memory") {
 
         const counts = env.jobs.map(([, job]) => job.count);
         expect(counts).to.eql([1, 2, 3, 4]);
+      });
+
+      describe("and jobs dont fail", () => {
+        it("executes only once", async () => {
+          await delay(10);
+
+          await env.producer.enqueue({
+            queue: "scheduled-eternity",
+            id: "a",
+            payload: "thou shalt succeed",
+            retry: [10, 100, 200],
+          });
+
+          await delay(500);
+
+          expect(env.events.map((e) => e.type)).to.deep.equal([
+            "scheduled",
+            "requested",
+            "acknowledged",
+          ]);
+        });
       });
     });
   });
