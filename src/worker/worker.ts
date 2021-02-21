@@ -211,6 +211,7 @@ export class Worker implements Closable {
       };
 
       let dontReschedule = false;
+      let hasFailed = false;
       try {
         debug(`requestNextJobs(): job #${id} - started working`);
         await this.processor(job, {
@@ -220,6 +221,8 @@ export class Worker implements Closable {
         });
         debug(`requestNextJobs(): job #${id} - finished working`);
       } catch (error) {
+        hasFailed = true;
+
         debug(`requestNextJobs(): job #${id} - failed`);
 
         const isRetryable = !!computeTimestampForNextRetry(
@@ -261,7 +264,7 @@ export class Worker implements Closable {
           nextExecDate = undefined;
         }
 
-        if (retry.length) {
+        if (hasFailed && retry.length) {
           nextExecDate = computeTimestampForNextRetry(runAt, retry, +count);
         }
 
