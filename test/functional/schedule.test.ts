@@ -35,6 +35,8 @@ function test(backend: "Redis" | "In-Memory") {
           const expectedExecutions = duration / 10;
 
           expect(env.jobs.length).to.be.closeTo(expectedExecutions, 1);
+          expect(env.nextExecDates.every((value) => value instanceof Date)).to
+            .be.true;
 
           expect(env.jobs.every(([, job], index) => job.count === index + 1)).to
             .be.true;

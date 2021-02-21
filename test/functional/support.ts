@@ -67,12 +67,14 @@ export function makeWorkerEnv(
   const workerEnv: typeof producerEnv & {
     worker: Worker;
     jobs: [number, Job][];
+    nextExecDates: (Date | undefined)[];
     errors: [Job, Error][];
   } = producerEnv as any;
 
   workerEnv.worker = null as any;
   workerEnv.jobs = [];
   workerEnv.errors = [];
+  workerEnv.nextExecDates = [];
 
   workerEnv.setup = async function setup() {
     await producerSetup();
@@ -80,8 +82,9 @@ export function makeWorkerEnv(
     workerEnv.jobs = [];
 
     workerEnv.worker = producerEnv.owl.createWorker(
-      async (job) => {
+      async (job, meta) => {
         workerEnv.jobs.push([Date.now(), job]);
+        workerEnv.nextExecDates.push(meta.nextExecDate);
 
         if (fail(job)) {
           throw new Error("failing!");

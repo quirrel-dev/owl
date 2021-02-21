@@ -42,6 +42,8 @@ function test(backend: "Redis" | "In-Memory") {
         await delay(600);
 
         expect(env.jobs).to.be.length(1000);
+        expect(env.nextExecDates.every((value) => typeof value === "undefined"))
+          .to.be.true;
 
         const delays = env.jobs.map(
           ([execTime, { payload }]) => execTime - +payload
@@ -59,4 +61,3 @@ function test(backend: "Redis" | "In-Memory") {
 
 test("Redis");
 test("In-Memory");
-
