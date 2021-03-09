@@ -86,6 +86,11 @@ export function makeWorkerEnv(
         workerEnv.jobs.push([Date.now(), job]);
         workerEnv.nextExecDates.push(meta.nextExecDate);
 
+        if (job.payload.startsWith("block:")) {
+          const duration = job.payload.split(":")[1];
+          await delay(+duration);
+        }
+
         if (fail(job)) {
           throw new Error("failing!");
         }
