@@ -85,25 +85,32 @@ export function makeWorkerEnv(
   const workerEnv: typeof producerEnv & {
     worker: Worker;
     jobs: [number, Job][];
+    nextExecDates: (number | undefined)[];
+    errors: [Job, Error][];
   } = producerEnv as any;
 
   workerEnv.worker = null as any;
   workerEnv.jobs = [];
+  workerEnv.errors = [];
+  workerEnv.nextExecDates = [];
 
   workerEnv.setup = async function setup() {
     await producerSetup();
 
     workerEnv.jobs = [];
 
-    workerEnv.worker = producerEnv.owl.createWorker(async (job, descriptor) => {
-      workerEnv.jobs.push([Date.now(), job]);
+    workerEnv.worker = producerEnv.owl.createWorker(
+      async (job, ackDescriptor) => {
+        workerEnv.jobs.push([Date.now(), job]);
+        workerEnv.nextExecDates.push(ackDescriptor.nextExecutionDate);
 
-      if (fail(job)) {
-        throw new Error("failing!");
-      } else {
-        await workerEnv.worker.acknowledger.acknowledge(descriptor);
+        if (fail(job)) {
+          throw new Error("failing!");
+        } else {
+          await workerEnv.worker.acknowledger.acknowledge(ackDescriptor);
+        }
       }
-    });
+    );
   };
 
   workerEnv.teardown = async function teardown() {

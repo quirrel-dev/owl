@@ -14,10 +14,6 @@ const cases = [
     value: "a:b:c",
     encoded: "a%3Ab%3Ac",
   },
-  {
-    value: "a:b%c",
-    encoded: "a%3Ab%25c",
-  },
 ];
 
 describe("encodeRedisKey", () => {

@@ -13,7 +13,7 @@ import {
   Acknowledger,
   OnError,
 } from "../shared/acknowledger";
-import { decodeRedisKey, encodeRedisKey } from "../encodeRedisKey";
+import { decodeRedisKey } from "../encodeRedisKey";
 
 const debug = createDebug("owl:worker");
 
@@ -47,9 +47,6 @@ declare module "ioredis" {
   }
 }
 
-export interface ProcessorMeta {
-  acknowledge(error?: any, dontReschedule?: boolean): Promise<void>;
-}
 export type Processor = (
   job: Readonly<Job>,
   ackDescriptor: AcknowledgementDescriptor
