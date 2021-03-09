@@ -131,6 +131,58 @@ function test(backend: "Redis" | "In-Memory") {
           indexOfBAcknowledged,
         ]);
       });
+      it("does not starve", async () => {
+        await env.producer.enqueue({
+          id: "a",
+          payload: "block:50",
+          queue: "my-queue",
+          exclusive: false,
+        });
+
+        await env.producer.enqueue({
+          id: "b",
+          payload: "2",
+          queue: "my-queue",
+          exclusive: true,
+        });
+
+        await env.producer.enqueue({
+          id: "c",
+          payload: "2",
+          queue: "my-queue",
+          exclusive: false,
+        });
+
+        await delay(100);
+
+        const indexOfARequested = env.events.findIndex(
+          (e) => e.type === "requested" && e.id === "a"
+        );
+        const indexOfBRequested = env.events.findIndex(
+          (e) => e.type === "requested" && e.id === "b"
+        );
+        const indexOfCRequested = env.events.findIndex(
+          (e) => e.type === "requested" && e.id === "c"
+        );
+
+        const indexOfAAcknowledged = env.events.findIndex(
+          (e) => e.type === "acknowledged" && e.id === "a"
+        );
+        const indexOfBAcknowledged = env.events.findIndex(
+          (e) => e.type === "acknowledged" && e.id === "b"
+        );
+        const indexOfCAcknowledged = env.events.findIndex(
+          (e) => e.type === "acknowledged" && e.id === "c"
+        );
+        expectInOrder([
+          indexOfARequested,
+          indexOfAAcknowledged,
+          indexOfBRequested,
+          indexOfBAcknowledged,
+          indexOfCRequested,
+          indexOfCAcknowledged,
+        ]);
+      });
     });
   });
 }
