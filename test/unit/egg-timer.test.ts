@@ -18,4 +18,16 @@ describe("EggTimer", () => {
       eggTimer.setTimer(Date.now() + 50);
     });
   });
+
+  describe("when set for > 32 bit", () => {
+    it("will time for max timeout instead", () => {
+      process.on("warning", (warning) => {
+        expect(warning).to.be.null
+      })
+
+      const eggTimer = new EggTimer(() => {});
+
+      eggTimer.setTimer(Date.now() + 3147483647);
+    });
+  });
 });

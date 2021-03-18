@@ -9,7 +9,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "nyc mocha",
+    "test": "nyc mocha --exit",
     "build": "tsc && node copy-lua.js",
     "prepack": "npm run build"
   },
