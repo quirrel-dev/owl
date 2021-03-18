@@ -6,12 +6,17 @@ export class EggTimer {
   constructor(private readonly functionToCall: () => void) {}
 
   public setTimer(timestamp: number) {
-    if (this.currentTimer) {
-      clearTimeout(this.currentTimer);
-    }
+    this.reset();
 
     const duration = Math.min(timestamp - Date.now(), timerMaxLimit);
 
     this.currentTimer = setTimeout(this.functionToCall, duration);
+  }
+
+  public reset() {
+    if (this.currentTimer) {
+      clearTimeout(this.currentTimer);
+      this.currentTimer = undefined;
+    }
   }
 }
