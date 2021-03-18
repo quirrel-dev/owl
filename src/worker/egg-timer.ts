@@ -1,3 +1,5 @@
+const timerMaxLimit = 2147483647;
+
 export class EggTimer {
   private currentTimer: NodeJS.Timeout | undefined;
 
@@ -8,6 +10,8 @@ export class EggTimer {
       clearTimeout(this.currentTimer);
     }
 
-    this.currentTimer = setTimeout(this.functionToCall, timestamp - Date.now());
+    const duration = Math.min(timestamp - Date.now(), timerMaxLimit);
+
+    this.currentTimer = setTimeout(this.functionToCall, duration);
   }
 }
