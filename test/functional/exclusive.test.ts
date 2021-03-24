@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { delay, makeActivityEnv } from "./support";
 
 function expectInOrder(numbers: number[]) {
+  expect(numbers).to.not.contain(-1);
   expect(numbers).to.eql([...numbers].sort());
 }
 
@@ -53,7 +54,7 @@ function test(backend: "Redis" | "In-Memory") {
     });
 
     describe("exclusive: true", () => {
-      it("executes jobs in serial", async () => {
+      it.only("executes jobs in serial", async () => {
         await env.producer.enqueue({
           id: "a",
           payload: "abcde",
