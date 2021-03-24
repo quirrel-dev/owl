@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { delay, makeActivityEnv } from "./support";
 
 function expectInOrder(numbers: number[]) {
+  expect(numbers).to.not.contain(-1);
   expect(numbers).to.eql([...numbers].sort());
 }
 
