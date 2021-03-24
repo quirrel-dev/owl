@@ -16,13 +16,13 @@ function test(backend: "Redis" | "In-Memory") {
       it("executes jobs in parallel", async () => {
         await env.producer.enqueue({
           id: "a",
-          payload: "abcde",
+          payload: "block:10",
           queue: "my-queue",
           exclusive: false,
         });
         await env.producer.enqueue({
           id: "b",
-          payload: "abcde",
+          payload: "block:10",
           queue: "my-queue",
           exclusive: false,
         });
