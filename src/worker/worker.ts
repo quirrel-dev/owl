@@ -148,6 +148,7 @@ export class Worker implements Closable {
     if (!result) {
       debug("requestNextJobs(): skipped (queue is empty)");
       this.queueIsKnownToBeEmpty = true;
+      this.eggTimer.reset();
       return;
     }
 

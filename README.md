@@ -78,3 +78,24 @@ Thus, their skillset makes them excellent queue keepers.
 
 At the moment, Owl does not aim to be compatible with Redis Cluster.
 This may change in the future, though.
+
+## Contributors ✨
+
+Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tr>
+    <td align="center"><a href="https://github.com/Skn0tt"><img src="https://avatars.githubusercontent.com/u/14912729?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Simon Knott</b></sub></a><br /><a href="https://github.com/quirrel-dev/Owl/commits?author=Skn0tt" title="Code">💻</a> <a href="#ideas-Skn0tt" title="Ideas, Planning, & Feedback">🤔</a></td>
+    <td align="center"><a href="https://github.com/DuckNrOne"><img src="https://avatars.githubusercontent.com/u/45163503?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Antony</b></sub></a><br /><a href="https://github.com/quirrel-dev/Owl/commits?author=DuckNrOne" title="Code">💻</a> <a href="https://github.com/quirrel-dev/Owl/issues?q=author%3ADuckNrOne" title="Bug reports">🐛</a></td>
+  </tr>
+</table>
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!
