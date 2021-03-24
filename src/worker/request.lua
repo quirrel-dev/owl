@@ -64,7 +64,8 @@ local retry = jobData[7]
 if exclusive == "true" then
   redis.call("SADD", KEYS[3], queue)
 
-  if redis.call("HGET", KEYS[4], queue) ~= "0" then
+  local currentlyExecutingJobs = redis.call("HGET", KEYS[4], queue)
+  if currentlyExecutingJobs ~= false and currentlyExecutingJobs ~= "0" then
     redis.call("ZADD", ARGV[3] .. ":" .. queue, scoreString, id)
     return -1
   end

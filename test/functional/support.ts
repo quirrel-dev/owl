@@ -37,7 +37,7 @@ export function makeProducerEnv(
 
   async function setup() {
     const scheduleMap = {
-      every: (lastDate, meta) => new Date(+lastDate + +meta),
+      every: (lastDate: Date, meta: string) => new Date(+lastDate + +meta),
     };
     if (inMemory) {
       env.redis = new IORedisMock();
