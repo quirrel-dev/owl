@@ -54,7 +54,7 @@ function test(backend: "Redis" | "In-Memory") {
     });
 
     describe("exclusive: true", () => {
-      it.only("executes jobs in serial", async () => {
+      it("executes jobs in serial", async () => {
         await env.producer.enqueue({
           id: "a",
           payload: "abcde",
