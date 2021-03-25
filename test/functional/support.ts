@@ -107,6 +107,8 @@ export function makeWorkerEnv(
         if (job.payload.startsWith("block:")) {
           const duration = job.payload.split(":")[1];
           await delay(+duration);
+        } else {
+          await delay(1);
         }
 
         if (fail(job)) {

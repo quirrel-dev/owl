@@ -39,7 +39,7 @@ function test(backend: "Redis" | "In-Memory") {
 
         await Promise.all(enqueueals);
 
-        await delay(600);
+        await delay(backend === "Redis" ? 100 : 2000);
 
         expect(env.jobs).to.be.length(1000);
         expect(env.nextExecDates.every((value) => typeof value === "undefined"))

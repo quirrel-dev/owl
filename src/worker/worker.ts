@@ -60,7 +60,9 @@ export class Worker implements Closable {
   private readonly redis;
   private readonly redisSub;
 
-  private readonly eggTimer = new EggTimer(() => this.events.emit("next"));
+  private readonly eggTimer = new EggTimer(() =>
+    this.events.emit("next", "timer")
+  );
   private queueIsKnownToBeEmpty = false;
 
   public readonly acknowledger: Acknowledger;
@@ -84,10 +86,10 @@ export class Worker implements Closable {
 
     this.events.on("next", (d) => this.requestNextJobs(d));
 
-    this.redisSub.on("message", (channel) => {
+    this.redisSub.on("message", (msg) => {
       setImmediate(() => {
         this.queueIsKnownToBeEmpty = false;
-        this.events.emit("next", "sub");
+        this.events.emit("next", "sub:" + msg);
       });
     });
 
@@ -154,7 +156,7 @@ export class Worker implements Closable {
 
     if (result === -1) {
       debug("requestNextJobs(): job's blocked", result);
-      this.events.emit("next");
+      this.queueIsKnownToBeEmpty = true;
       return;
     }
 
@@ -232,14 +234,14 @@ export class Worker implements Closable {
 
     this.currentlyProcessingJobs.add(currentlyProcessing);
     if (!this.queueIsKnownToBeEmpty) {
-      this.events.emit("next");
+      this.events.emit("next", "feed");
     }
 
     await currentlyProcessing;
     this.currentlyProcessingJobs.delete(currentlyProcessing);
 
     if (!this.queueIsKnownToBeEmpty) {
-      this.events.emit("next");
+      this.events.emit("next", "thank u, next");
     }
   }
 
