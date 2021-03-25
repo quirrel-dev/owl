@@ -54,7 +54,7 @@ function test(backend: "Redis" | "In-Memory") {
 
         await waitUntil(
           () => env.jobs.length === 1000,
-          backend === "Redis" ? 200 : 4000
+          backend === "Redis" ? 500 : 5000
         );
 
         expect(env.jobs).to.be.length(1000);
