@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { OnActivityEvent } from "../../src/activity/activity";
 import { delay, makeActivityEnv } from "./support";
 
 function expectInOrder(numbers: number[]) {
@@ -12,6 +13,16 @@ function test(backend: "Redis" | "In-Memory") {
 
     beforeEach(env.setup);
     afterEach(env.teardown);
+
+    function eventIndex(type: OnActivityEvent["type"], id: string) {
+      return env.events.findIndex((e) => {
+        if (e.type === "scheduled") {
+          return e.type == type && e.job.id === id;
+        }
+
+        return e.type === type && e.id === id;
+      });
+    }
 
     describe("exclusive: false", () => {
       it("executes jobs in parallel", async () => {
@@ -30,25 +41,11 @@ function test(backend: "Redis" | "In-Memory") {
 
         await delay(50);
 
-        const indexOfARequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "a"
-        );
-        const indexOfBRequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "b"
-        );
-
-        const indexOfAAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "a"
-        );
-        const indexOfBAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "b"
-        );
-
         expectInOrder([
-          indexOfARequested,
-          indexOfBRequested,
-          indexOfAAcknowledged,
-          indexOfBAcknowledged,
+          eventIndex("requested", "a"),
+          eventIndex("requested", "b"),
+          eventIndex("acknowledged", "a"),
+          eventIndex("acknowledged", "b"),
         ]);
       });
     });
@@ -70,25 +67,11 @@ function test(backend: "Redis" | "In-Memory") {
 
         await delay(50);
 
-        const indexOfARequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "a"
-        );
-        const indexOfBRequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "b"
-        );
-
-        const indexOfAAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "a"
-        );
-        const indexOfBAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "b"
-        );
-
         expectInOrder([
-          indexOfARequested,
-          indexOfAAcknowledged,
-          indexOfBRequested,
-          indexOfBAcknowledged,
+          eventIndex("requested", "a"),
+          eventIndex("acknowledged", "a"),
+          eventIndex("requested", "b"),
+          eventIndex("acknowledged", "b"),
         ]);
       });
     });
@@ -111,25 +94,11 @@ function test(backend: "Redis" | "In-Memory") {
 
         await delay(50);
 
-        const indexOfARequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "a"
-        );
-        const indexOfBRequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "b"
-        );
-
-        const indexOfAAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "a"
-        );
-        const indexOfBAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "b"
-        );
-
         expectInOrder([
-          indexOfARequested,
-          indexOfAAcknowledged,
-          indexOfBRequested,
-          indexOfBAcknowledged,
+          eventIndex("requested", "a"),
+          eventIndex("acknowledged", "a"),
+          eventIndex("requested", "b"),
+          eventIndex("acknowledged", "b"),
         ]);
       });
       it("does not starve", async () => {
@@ -154,34 +123,15 @@ function test(backend: "Redis" | "In-Memory") {
           exclusive: false,
         });
 
-        await delay(100);
+        await delay(200);
 
-        const indexOfARequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "a"
-        );
-        const indexOfBRequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "b"
-        );
-        const indexOfCRequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "c"
-        );
-
-        const indexOfAAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "a"
-        );
-        const indexOfBAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "b"
-        );
-        const indexOfCAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "c"
-        );
         expectInOrder([
-          indexOfARequested,
-          indexOfAAcknowledged,
-          indexOfBRequested,
-          indexOfBAcknowledged,
-          indexOfCRequested,
-          indexOfCAcknowledged,
+          eventIndex("requested", "a"),
+          eventIndex("acknowledged", "a"),
+          eventIndex("requested", "b"),
+          eventIndex("acknowledged", "b"),
+          eventIndex("requested", "c"),
+          eventIndex("acknowledged", "c"),
         ]);
       });
     });
