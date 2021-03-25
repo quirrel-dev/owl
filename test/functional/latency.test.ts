@@ -1,16 +1,29 @@
 import { expect } from "chai";
 import { makeWorkerEnv } from "./support";
 
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function sum(nums: number[]) {
   return nums.reduce((curr, acc) => curr + acc, 0);
 }
 
 function average(nums: number[]) {
   return sum(nums) / nums.length;
+}
+
+export function waitUntil(predicate: () => boolean, butMax: number, interval = 50) {
+  return new Promise<void>((resolve) => {
+    const check = setInterval(() => {
+      if (predicate()) {
+        clearInterval(check);
+        clearTimeout(max);
+        resolve();
+      }
+    }, interval);
+
+    const max = setTimeout(() => {
+      clearInterval(check);
+      resolve();
+    }, butMax);
+  });
 }
 
 function test(backend: "Redis" | "In-Memory") {
@@ -39,7 +52,10 @@ function test(backend: "Redis" | "In-Memory") {
 
         await Promise.all(enqueueals);
 
-        await delay(backend === "Redis" ? 100 : 2000);
+        await waitUntil(
+          () => env.jobs.length === 1000,
+          backend === "Redis" ? 200 : 4000
+        );
 
         expect(env.jobs).to.be.length(1000);
         expect(env.nextExecDates.every((value) => typeof value === "undefined"))

@@ -120,7 +120,7 @@ function test(backend: "Redis" | "In-Memory") {
         await env.producer.invoke("producer-invoke", "a");
 
         const invokedJob = await env.producer.findById("producer-invoke", "a");
-        expect(+invokedJob.runAt).to.be.closeTo(Date.now(), 10);
+        expect(+invokedJob.runAt).to.be.closeTo(Date.now(), 20);
       });
     });
 
