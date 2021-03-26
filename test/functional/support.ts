@@ -164,6 +164,7 @@ export function makeActivityEnv(backend: Backend, fail?: WorkerFailPredicate) {
       activityEnv.events.push(event);
     });
 
+    // wait for activity to actually connect
     await delay(10);
   };
 

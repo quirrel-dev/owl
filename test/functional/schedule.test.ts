@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { delay, describeAcrossBackends } from "../util";
+import { delay, describeAcrossBackends, waitUntil } from "../util";
 import { makeWorkerEnv } from "./support";
 
 describeAcrossBackends("Schedule", (backend) => {

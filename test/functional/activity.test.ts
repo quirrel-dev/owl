@@ -17,8 +17,6 @@ describeAcrossBackends("Activity", (backend) => {
   }
 
   it("publishes all relevant information", async () => {
-    await delay(50);
-
     const currentDate = new Date();
 
     await env.producer.enqueue({
@@ -49,8 +47,6 @@ describeAcrossBackends("Activity", (backend) => {
     });
 
     await env.producer.delete("activity:queue", "b;wild");
-
-    await delay(100);
 
     await expectEventsToEventuallyMatch(
       [

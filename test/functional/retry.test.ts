@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { makeActivityEnv } from "./support";
 import { delay, describeAcrossBackends, makeSignal, waitUntil } from "../util";
+import { worker } from "node:cluster";
 
 describeAcrossBackends("Retry", (backend) => {
   const env = makeActivityEnv(backend, (job) => {
@@ -39,8 +40,12 @@ describeAcrossBackends("Retry", (backend) => {
 
   describe("when given retry: [10, 100, 1000]", () => {
     it("retries along that schedule", async () => {
-      await delay(10);
-
+      const finishedAllRetries = makeSignal();
+      env.onStartedJob((job) => {
+        if (job.count === 3) {
+          finishedAllRetries.signal();
+        }
+      });
       await env.producer.enqueue({
         queue: "scheduled-eternity",
         id: "a",
@@ -48,11 +53,11 @@ describeAcrossBackends("Retry", (backend) => {
         retry: [10, 100, 200],
       });
 
-      await delay(500);
+      await finishedAllRetries;
 
       const retryCycle = ["requested", "retry", "acknowledged", "rescheduled"];
 
-      expect(env.events.map((e) => e.type)).to.deep.equal([
+      const expectedTypes = [
         "scheduled",
         ...retryCycle,
         ...retryCycle,
@@ -60,7 +65,11 @@ describeAcrossBackends("Retry", (backend) => {
         "requested",
         "fail",
         "acknowledged",
-      ]);
+      ];
+
+      await waitUntil(() => env.events.length === expectedTypes.length, 300);
+
+      expect(env.events.map((e) => e.type)).to.deep.equal(expectedTypes);
 
       expect(env.errors).to.have.length(1);
 

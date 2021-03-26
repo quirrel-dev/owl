@@ -42,7 +42,7 @@ function removeFirstStackLine(string: string): string {
 export function waitUntil(
   predicate: () => boolean,
   butMax: number,
-  interval = 50
+  interval = 20
 ) {
   const potentialError = new AssertionError(
     `Predicate was not fulfilled on time (${predicate.toString()})`,

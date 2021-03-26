@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { OnActivityEvent } from "../../src/activity/activity";
-import { delay, describeAcrossBackends } from "../util";
+import { delay, describeAcrossBackends, waitUntil } from "../util";
 import { makeActivityEnv } from "./support";
 
 function expectInOrder(numbers: number[]) {
@@ -24,6 +24,24 @@ describeAcrossBackends("Exclusive", (backend) => {
     });
   }
 
+  async function waitUntilEvent(
+    type: OnActivityEvent["type"],
+    id: string,
+    maxWait: number = 50
+  ) {
+    await waitUntil(
+      () =>
+        env.events.some((ev) => {
+          if (ev.type === "scheduled") {
+            return ev.type === type && ev.job.id === id;
+          }
+
+          return ev.type === type && ev.id === id;
+        }),
+      maxWait
+    );
+  }
+
   describe("exclusive: false", () => {
     it("executes jobs in parallel", async () => {
       await env.producer.enqueue({
@@ -39,7 +57,7 @@ describeAcrossBackends("Exclusive", (backend) => {
         exclusive: false,
       });
 
-      await delay(50);
+      await waitUntilEvent("acknowledged", "b");
 
       expectInOrder([
         eventIndex("requested", "a"),
@@ -65,7 +83,7 @@ describeAcrossBackends("Exclusive", (backend) => {
         exclusive: true,
       });
 
-      await delay(50);
+      await waitUntilEvent("acknowledged", "b");
 
       expectInOrder([
         eventIndex("requested", "a"),
@@ -92,7 +110,7 @@ describeAcrossBackends("Exclusive", (backend) => {
         exclusive: true,
       });
 
-      await delay(50);
+      await waitUntilEvent("acknowledged", "b");
 
       expectInOrder([
         eventIndex("requested", "a"),
@@ -123,7 +141,7 @@ describeAcrossBackends("Exclusive", (backend) => {
         exclusive: false,
       });
 
-      await delay(200);
+      await waitUntilEvent("acknowledged", "c", 300);
 
       expectInOrder([
         eventIndex("requested", "a"),
