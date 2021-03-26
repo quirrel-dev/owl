@@ -3,7 +3,7 @@ import Redis from "ioredis";
 import { migrate, processingToSortedSet } from "../../src/shared/migrator";
 
 describe("migrations", () => {
-  const redis = new Redis();
+  const redis = new Redis(process.env.REDIS_URL);
 
   beforeEach(async () => {
     await redis.flushall();
