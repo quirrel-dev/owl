@@ -1,10 +1,6 @@
 import { expect } from "chai";
-import { describeAcrossBackends } from "../util";
+import { delay, describeAcrossBackends } from "../util";
 import { makeWorkerEnv } from "./support";
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 describeAcrossBackends("Schedule", (backend) => {
   const env = makeWorkerEnv(backend);

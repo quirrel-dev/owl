@@ -1,5 +1,5 @@
-import { expect, AssertionError } from "chai";
-import { describeAcrossBackends } from "../util";
+import { expect } from "chai";
+import { describeAcrossBackends, waitUntil } from "../util";
 import { makeWorkerEnv } from "./support";
 
 function sum(nums: number[]) {
@@ -8,39 +8,6 @@ function sum(nums: number[]) {
 
 function average(nums: number[]) {
   return sum(nums) / nums.length;
-}
-
-function removeFirstStackLine(string: string): string {
-  return string.replace(/\n.*\n/, "");
-}
-
-export function waitUntil(
-  predicate: () => boolean,
-  butMax: number,
-  interval = 50
-) {
-  const potentialError = new AssertionError(
-    `Predicate was not fulfilled on time (${predicate.toString()})`,
-    {
-      showDiff: false,
-    }
-  );
-  potentialError.stack = removeFirstStackLine(potentialError.stack);
-
-  return new Promise<void>((resolve, reject) => {
-    const check = setInterval(() => {
-      if (predicate()) {
-        clearInterval(check);
-        clearTimeout(max);
-        resolve();
-      }
-    }, interval);
-
-    const max = setTimeout(() => {
-      clearInterval(check);
-      reject(potentialError);
-    }, butMax);
-  });
 }
 
 describeAcrossBackends("Latency", (backend) => {

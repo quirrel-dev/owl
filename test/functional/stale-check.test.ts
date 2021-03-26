@@ -1,6 +1,6 @@
 import { expect } from "chai";
-import { describeAcrossBackends } from "../util";
-import { delay, makeProducerEnv } from "./support";
+import { delay, describeAcrossBackends } from "../util";
+import { makeProducerEnv } from "./support";
 
 describeAcrossBackends("stale-check", (backend) => {
   const env = makeProducerEnv(backend, {

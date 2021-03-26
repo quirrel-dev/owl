@@ -1,12 +1,6 @@
 import { expect } from "chai";
 import { makeActivityEnv } from "./support";
-import { makeSignal } from "./dont-reschedule.test";
-import { waitUntil } from "./latency.test";
-import { describeAcrossBackends } from "../util";
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+import { delay, describeAcrossBackends, makeSignal, waitUntil } from "../util";
 
 describeAcrossBackends("Retry", (backend) => {
   const env = makeActivityEnv(backend, (job) => {

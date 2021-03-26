@@ -1,20 +1,6 @@
 import { expect } from "chai";
-import { describeAcrossBackends } from "../util";
+import { describeAcrossBackends, makeSignal } from "../util";
 import { makeProducerEnv } from "./support";
-
-type Signal = Promise<void> & { signal(): void };
-
-export function makeSignal(): Signal {
-  let _resolve: () => void;
-
-  const promise = new Promise<void>((resolve) => {
-    _resolve = resolve;
-  }) as Signal;
-
-  promise.signal = _resolve;
-
-  return promise;
-}
 
 describeAcrossBackends("dontReschedule", (backend) => {
   it("works", async () => {

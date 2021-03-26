@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { OnActivityEvent } from "../../src/activity/activity";
-import { describeAcrossBackends } from "../util";
-import { delay, makeActivityEnv } from "./support";
+import { delay, describeAcrossBackends } from "../util";
+import { makeActivityEnv } from "./support";
 
 function expectInOrder(numbers: number[]) {
   expect(numbers).to.not.contain(-1);

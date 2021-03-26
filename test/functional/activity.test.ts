@@ -1,11 +1,6 @@
 import { expect } from "chai";
-import { describeAcrossBackends } from "../util";
-import { waitUntil } from "./latency.test";
+import { delay, describeAcrossBackends, waitUntil } from "../util";
 import { makeActivityEnv } from "./support";
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 describeAcrossBackends("Activity", (backend) => {
   const env = makeActivityEnv(backend);

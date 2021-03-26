@@ -6,11 +6,7 @@ import { Activity, OnActivityEvent } from "../../src/activity/activity";
 import { Worker } from "../../src/worker/worker";
 import { Job } from "../../src/Job";
 import { AcknowledgementDescriptor } from "../../src/shared/acknowledger";
-import { Backend } from "../util";
-
-export function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+import { Backend, delay } from "../util";
 
 export function makeProducerEnv(
   backend: Backend,
