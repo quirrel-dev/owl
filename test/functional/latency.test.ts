@@ -1,4 +1,4 @@
-import { expect } from "chai";
+import { expect, AssertionError } from "chai";
 import { makeWorkerEnv } from "./support";
 
 function sum(nums: number[]) {
@@ -9,8 +9,24 @@ function average(nums: number[]) {
   return sum(nums) / nums.length;
 }
 
-export function waitUntil(predicate: () => boolean, butMax: number, interval = 50) {
-  return new Promise<void>((resolve) => {
+function removeFirstStackLine(string: string): string {
+  return string.replace(/\n.*\n/, "");
+}
+
+export function waitUntil(
+  predicate: () => boolean,
+  butMax: number,
+  interval = 50
+) {
+  const potentialError = new AssertionError(
+    `Predicate was not fulfilled on time (${predicate.toString()})`,
+    {
+      showDiff: false,
+    }
+  );
+  potentialError.stack = removeFirstStackLine(potentialError.stack);
+
+  return new Promise<void>((resolve, reject) => {
     const check = setInterval(() => {
       if (predicate()) {
         clearInterval(check);
@@ -21,7 +37,7 @@ export function waitUntil(predicate: () => boolean, butMax: number, interval = 5
 
     const max = setTimeout(() => {
       clearInterval(check);
-      resolve();
+      reject(potentialError);
     }, butMax);
   });
 }
