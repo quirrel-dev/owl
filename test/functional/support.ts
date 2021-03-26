@@ -73,6 +73,8 @@ export function makeProducerEnv(
 
 type WorkerFailPredicate = (job: Job<string>) => boolean;
 
+type JobListener = (job: Job<string>) => void;
+
 export function makeWorkerEnv(
   inMemory = false,
   fail: WorkerFailPredicate = (job: Job<string>) => false
@@ -87,6 +89,8 @@ export function makeWorkerEnv(
     jobs: [number, Job][];
     nextExecDates: (number | undefined)[];
     errors: [Job, Error][];
+    onStartedJob(doIt: JobListener): void;
+    onFinishedJob(doIt: JobListener): void;
   } = producerEnv as any;
 
   workerEnv.worker = null as any;
@@ -94,13 +98,23 @@ export function makeWorkerEnv(
   workerEnv.errors = [];
   workerEnv.nextExecDates = [];
 
+  let onStartedListeners: JobListener[] = [];
+  workerEnv.onStartedJob = (doIt) => onStartedListeners.push(doIt);
+
+  let onFinishedListeners: JobListener[] = [];
+  workerEnv.onFinishedJob = (doIt) => onFinishedListeners.push(doIt);
+
   workerEnv.setup = async function setup() {
     await producerSetup();
 
     workerEnv.jobs = [];
+    onStartedListeners = [];
+    onFinishedListeners = [];
 
     workerEnv.worker = producerEnv.owl.createWorker(
       async (job, ackDescriptor) => {
+        onStartedListeners.forEach((listener) => listener(job));
+
         workerEnv.jobs.push([Date.now(), job]);
         workerEnv.nextExecDates.push(ackDescriptor.nextExecutionDate);
 
@@ -116,6 +130,8 @@ export function makeWorkerEnv(
         } else {
           await workerEnv.worker.acknowledger.acknowledge(ackDescriptor);
         }
+
+        onFinishedListeners.forEach((listener) => listener(job));
       }
     );
   };
@@ -150,6 +166,8 @@ export function makeActivityEnv(inMemory = false, fail?: WorkerFailPredicate) {
     activityEnv.activity = workerEnv.owl.createActivity((event) => {
       activityEnv.events.push(event);
     });
+
+    await delay(10);
   };
 
   activityEnv.teardown = async function teardown() {

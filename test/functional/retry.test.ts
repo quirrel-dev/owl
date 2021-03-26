@@ -1,5 +1,7 @@
 import { expect } from "chai";
 import { makeActivityEnv } from "./support";
+import { makeSignal } from "./dont-reschedule.test";
+import { waitUntil } from "./latency.test";
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -84,8 +86,9 @@ function test(backend: "Redis" | "In-Memory") {
       });
 
       describe("and jobs dont fail", () => {
-        it("executes only once", async () => {
-          await delay(10);
+        it("executes only once", async function () {
+          const finished = makeSignal();
+          env.onFinishedJob(finished.signal);
 
           await env.producer.enqueue({
             queue: "scheduled-eternity",
@@ -94,7 +97,9 @@ function test(backend: "Redis" | "In-Memory") {
             retry: [10, 100, 200],
           });
 
-          await delay(500);
+          await finished;
+
+          await waitUntil(() => env.events.length === 3, 100);
 
           expect(env.events.map((e) => e.type)).to.deep.equal([
             "scheduled",

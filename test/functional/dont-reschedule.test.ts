@@ -1,15 +1,31 @@
 import { expect } from "chai";
-import { makeProducerEnv, delay } from "./support";
+import { makeProducerEnv } from "./support";
+
+type Signal = Promise<void> & { signal(): void };
+
+export function makeSignal(): Signal {
+  let _resolve: () => void;
+
+  const promise = new Promise<void>((resolve) => {
+    _resolve = resolve;
+  }) as Signal;
+
+  promise.signal = _resolve;
+
+  return promise;
+}
 
 function test(backend: "Redis" | "In-Memory") {
   it(backend + " > dontReschedule", async () => {
     const producerEnv = makeProducerEnv(backend === "In-Memory");
     await producerEnv.setup();
 
+    const acknowledged = makeSignal();
     const worker = producerEnv.owl.createWorker(async (job, meta) => {
-      worker.acknowledger.acknowledge(meta, {
+      await worker.acknowledger.acknowledge(meta, {
         dontReschedule: true,
       });
+      acknowledged.signal();
     });
 
     await producerEnv.producer.enqueue({
@@ -22,7 +38,7 @@ function test(backend: "Redis" | "In-Memory") {
       },
     });
 
-    await delay(50);
+    await acknowledged;
 
     const job = await producerEnv.producer.findById("q", "a");
     expect(job).to.be.null;
