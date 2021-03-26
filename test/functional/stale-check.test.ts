@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { delay, describeAcrossBackends } from "../util";
+import { delay, describeAcrossBackends, waitUntil } from "../util";
 import { makeProducerEnv } from "./support";
 
 describeAcrossBackends("stale-check", (backend) => {
@@ -68,9 +68,7 @@ describeAcrossBackends("stale-check", (backend) => {
     await env.producer.staleChecker.check();
     expect(env.errors).to.deep.equal([]);
 
-    await delay(300);
-
-    expect(calls).to.eq(2);
+    await waitUntil(() => calls === 2, 500)
 
     await worker.close();
   });
