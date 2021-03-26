@@ -6,13 +6,14 @@ import { Activity, OnActivityEvent } from "../../src/activity/activity";
 import { Worker } from "../../src/worker/worker";
 import { Job } from "../../src/Job";
 import { AcknowledgementDescriptor } from "../../src/shared/acknowledger";
+import { Backend } from "../util";
 
 export function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function makeProducerEnv(
-  inMemory = false,
+  backend: Backend,
   config?: Partial<OwlConfig<any>>
 ) {
   const env: {
@@ -39,7 +40,7 @@ export function makeProducerEnv(
     const scheduleMap = {
       every: (lastDate: Date, meta: string) => new Date(+lastDate + +meta),
     };
-    if (inMemory) {
+    if (backend === "In-Memory") {
       env.redis = new IORedisMock();
       env.owl = new Owl({
         redisFactory: () => (env.redis as any).createConnectedClient(),
@@ -76,10 +77,10 @@ type WorkerFailPredicate = (job: Job<string>) => boolean;
 type JobListener = (job: Job<string>) => void;
 
 export function makeWorkerEnv(
-  inMemory = false,
+  backend: Backend,
   fail: WorkerFailPredicate = (job: Job<string>) => false
 ) {
-  const producerEnv = makeProducerEnv(inMemory);
+  const producerEnv = makeProducerEnv(backend);
 
   const producerSetup = producerEnv.setup;
   const producerTeardown = producerEnv.teardown;
@@ -144,8 +145,8 @@ export function makeWorkerEnv(
   return workerEnv;
 }
 
-export function makeActivityEnv(inMemory = false, fail?: WorkerFailPredicate) {
-  const workerEnv = makeWorkerEnv(inMemory, fail);
+export function makeActivityEnv(backend: Backend, fail?: WorkerFailPredicate) {
+  const workerEnv = makeWorkerEnv(backend, fail);
 
   const workerSetup = workerEnv.setup;
   const workerTeardown = workerEnv.teardown;

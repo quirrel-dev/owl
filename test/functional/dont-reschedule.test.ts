@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { againstAllBackends } from "../util";
 import { makeProducerEnv } from "./support";
 
 type Signal = Promise<void> & { signal(): void };
@@ -15,9 +16,9 @@ export function makeSignal(): Signal {
   return promise;
 }
 
-function test(backend: "Redis" | "In-Memory") {
-  it(backend + " > dontReschedule", async () => {
-    const producerEnv = makeProducerEnv(backend === "In-Memory");
+againstAllBackends("dontReschedule", (backend) => {
+  it("works", async () => {
+    const producerEnv = makeProducerEnv(backend);
     await producerEnv.setup();
 
     const acknowledged = makeSignal();
@@ -46,7 +47,4 @@ function test(backend: "Redis" | "In-Memory") {
     await producerEnv.teardown();
     await worker.close();
   });
-}
-
-test("In-Memory");
-test("Redis");
+});

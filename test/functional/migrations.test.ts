@@ -2,7 +2,7 @@ import { expect } from "chai";
 import Redis from "ioredis";
 import { migrate, processingToSortedSet } from "../../src/shared/migrator";
 
-describe("migrations", () => {
+describe("Migrations", () => {
   const redis = new Redis(process.env.REDIS_URL);
 
   beforeEach(async () => {
