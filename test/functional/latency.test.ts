@@ -1,5 +1,5 @@
 import { expect, AssertionError } from "chai";
-import { againstAllBackends } from "../util";
+import { describeAcrossBackends } from "../util";
 import { makeWorkerEnv } from "./support";
 
 function sum(nums: number[]) {
@@ -43,7 +43,7 @@ export function waitUntil(
   });
 }
 
-againstAllBackends("Latency", (backend) => {
+describeAcrossBackends("Latency", (backend) => {
   const env = makeWorkerEnv(backend);
 
   beforeEach(env.setup);

@@ -2,13 +2,13 @@ import { expect } from "chai";
 import { makeActivityEnv } from "./support";
 import { makeSignal } from "./dont-reschedule.test";
 import { waitUntil } from "./latency.test";
-import { againstAllBackends } from "../util";
+import { describeAcrossBackends } from "../util";
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-againstAllBackends("Retry", (backend) => {
+describeAcrossBackends("Retry", (backend) => {
   const env = makeActivityEnv(backend, (job) => {
     if (job.payload === "thou shalt succeed") {
       return false;

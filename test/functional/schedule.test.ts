@@ -1,12 +1,12 @@
 import { expect } from "chai";
-import { againstAllBackends } from "../util";
+import { describeAcrossBackends } from "../util";
 import { makeWorkerEnv } from "./support";
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-againstAllBackends("Schedule", (backend) => {
+describeAcrossBackends("Schedule", (backend) => {
   const env = makeWorkerEnv(backend);
 
   beforeEach(env.setup);

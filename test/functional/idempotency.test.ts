@@ -1,8 +1,8 @@
 import { expect } from "chai";
-import { againstAllBackends } from "../util";
+import { describeAcrossBackends } from "../util";
 import { makeProducerEnv } from "./support";
 
-againstAllBackends("Idempotency", (backend) => {
+describeAcrossBackends("Idempotency", (backend) => {
   const env = makeProducerEnv(backend);
 
   beforeEach(env.setup);

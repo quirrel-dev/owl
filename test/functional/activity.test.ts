@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { againstAllBackends } from "../util";
+import { describeAcrossBackends } from "../util";
 import { waitUntil } from "./latency.test";
 import { makeActivityEnv } from "./support";
 
@@ -7,7 +7,7 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-againstAllBackends("Activity", (backend) => {
+describeAcrossBackends("Activity", (backend) => {
   const env = makeActivityEnv(backend);
 
   beforeEach(env.setup);

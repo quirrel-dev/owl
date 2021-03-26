@@ -1,6 +1,6 @@
 export type Backend = "In-Memory" | "Redis";
 
-export function againstAllBackends(
+export function describeAcrossBackends(
   topic: string,
   runTests: (backend: Backend) => void
 ) {

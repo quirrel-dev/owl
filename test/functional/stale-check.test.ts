@@ -1,8 +1,8 @@
 import { expect } from "chai";
-import { againstAllBackends } from "../util";
+import { describeAcrossBackends } from "../util";
 import { delay, makeProducerEnv } from "./support";
 
-againstAllBackends("stale-check", (backend) => {
+describeAcrossBackends("stale-check", (backend) => {
   const env = makeProducerEnv(backend, {
     staleChecker: {
       interval: "manual",

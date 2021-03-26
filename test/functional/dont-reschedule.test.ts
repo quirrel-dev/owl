@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { againstAllBackends } from "../util";
+import { describeAcrossBackends } from "../util";
 import { makeProducerEnv } from "./support";
 
 type Signal = Promise<void> & { signal(): void };
@@ -16,7 +16,7 @@ export function makeSignal(): Signal {
   return promise;
 }
 
-againstAllBackends("dontReschedule", (backend) => {
+describeAcrossBackends("dontReschedule", (backend) => {
   it("works", async () => {
     const producerEnv = makeProducerEnv(backend);
     await producerEnv.setup();

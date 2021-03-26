@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { OnActivityEvent } from "../../src/activity/activity";
-import { againstAllBackends } from "../util";
+import { describeAcrossBackends } from "../util";
 import { delay, makeActivityEnv } from "./support";
 
 function expectInOrder(numbers: number[]) {
@@ -8,7 +8,7 @@ function expectInOrder(numbers: number[]) {
   expect(numbers).to.eql([...numbers].sort());
 }
 
-againstAllBackends("Exclusive", (backend) => {
+describeAcrossBackends("Exclusive", (backend) => {
   const env = makeActivityEnv(backend);
 
   beforeEach(env.setup);
