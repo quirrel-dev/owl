@@ -7,7 +7,7 @@ import type { Acknowledger } from "./acknowledger";
 const oneMinute = 60 * 1000;
 
 export interface StaleCheckerConfig {
-  interval?: number;
+  interval?: number | "manual";
   staleAfter?: number;
 }
 
@@ -24,10 +24,12 @@ export class StaleChecker implements Closable {
   ) {
     this.staleAfter = config.staleAfter ?? 60 * oneMinute;
 
-    this.intervalId = setInterval(
-      () => this.check(),
-      config.interval ?? oneMinute
-    );
+    if (config.interval !== "manual") {
+      this.intervalId = setInterval(
+        () => this.check(),
+        config.interval ?? oneMinute
+      );
+    }
   }
 
   public close() {

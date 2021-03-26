@@ -5,7 +5,7 @@ function testAgainst(backend: "Redis" | "In-Memory") {
   describe(backend + " > stale-check", () => {
     const env = makeProducerEnv(backend === "In-Memory", {
       staleChecker: {
-        interval: 60 * 1000,
+        interval: "manual",
         staleAfter: 1000,
       },
     });
