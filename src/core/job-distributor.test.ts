@@ -153,4 +153,70 @@ describe(JobDistributor.name, () => {
 
     expect(log).to.eql(["fetch:1", "fetch:2"]);
   });
+
+  describe("error handling", () => {
+    describe("during fetching", () => {
+      it("throws", async () => {
+        const distributor = new JobDistributor(
+          async () => {
+            throw new Error("Fetch failed!");
+          },
+          async (job) => {}
+        );
+
+        distributor.setTimeout = (cb) => {
+          return null as any;
+        };
+
+        try {
+          await distributor.checkForNewJobs();
+
+          expect(false).to.be.true;
+        } catch (error) {
+          expect(error.message).to.equal("Fetch failed!");
+        }
+      });
+    });
+    describe("during execution", () => {
+      let oldError: any;
+      const errors: any[][] = [];
+      before(() => {
+        oldError = global.console.error;
+        global.console.error = (...args: any[]) => {
+          errors.push(args.map(String));
+        };
+      });
+
+      after(() => {
+        global.console.error = oldError;
+      });
+
+      it("console.errors", async () => {
+        let call = 0;
+        const distributor = new JobDistributor(
+          async () => {
+            call++;
+            if (call === 1) {
+              return ["success", "job"];
+            }
+            return ["empty"];
+          },
+          async (job) => {
+            console.log("Hello");
+            throw new Error("Run failed!");
+          }
+        );
+
+        distributor.setTimeout = (cb) => {
+          return null as any;
+        };
+
+        await distributor.checkForNewJobs();
+
+        expect(errors).to.eql([["Error: Run failed!"]]);
+      });
+    });
+  });
+
+  it("deals with errors during execution", () => {});
 });

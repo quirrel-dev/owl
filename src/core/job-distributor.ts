@@ -22,7 +22,13 @@ export class JobDistributor<T> implements Closable {
 
   private async workOn(job: T) {
     this.jobs.add(job);
-    await this.run(job);
+    
+    try {
+      await this.run(job);
+    } catch (e) {
+      console.error(e);
+    }
+
     this.jobs.delete(job);
 
     this.checkForNewJobs();
