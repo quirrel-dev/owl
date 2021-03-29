@@ -48,7 +48,7 @@ function parseTenantFromChannel(topic: string) {
     return topic.slice(1, topic.indexOf("}"));
   }
 
-  return topic;
+  return "";
 }
 
 export class Worker implements Closable {
