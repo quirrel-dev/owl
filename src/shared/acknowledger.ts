@@ -1,8 +1,7 @@
 import createDebug from "debug";
 import { Pipeline, Redis } from "ioredis";
-import * as fs from "fs";
-import * as path from "path";
 import { encodeRedisKey } from "../encodeRedisKey";
+import { defineLocalCommands } from "../redis-commands";
 
 const debug = createDebug("owl:acknowledger");
 
@@ -52,10 +51,7 @@ export class Acknowledger {
     private readonly redis: Redis,
     private readonly onError?: OnError
   ) {
-    this.redis.defineCommand("acknowledge", {
-      lua: fs.readFileSync(path.join(__dirname, "acknowledge.lua")).toString(),
-      numberOfKeys: 7,
-    });
+    defineLocalCommands(this.redis, __dirname);
   }
 
   public _reportFailure(

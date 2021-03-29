@@ -1,6 +1,9 @@
 import { expect } from "chai";
 import Redis from "ioredis";
-import { migrate, processingToSortedSet } from "../../src/shared/migrator";
+import {
+  migrate,
+  processingToSortedSet,
+} from "../../src/shared/migrator/migrator";
 
 describe("Migrations", () => {
   const redis = new Redis(process.env.REDIS_URL);

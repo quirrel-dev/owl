@@ -1,12 +1,11 @@
 import { Redis } from "ioredis";
 import { Closable } from "../Closable";
 import { Job, JobEnqueue } from "../Job";
-import * as fs from "fs";
-import * as path from "path";
 import createDebug from "debug";
 import { Acknowledger, OnError } from "../shared/acknowledger";
 import { StaleChecker, StaleCheckerConfig } from "../shared/stale-checker";
 import { decodeRedisKey, encodeRedisKey } from "../encodeRedisKey";
+import { defineLocalCommands } from "../redis-commands";
 
 const debug = createDebug("owl:producer");
 
@@ -59,20 +58,7 @@ export class Producer<ScheduleType extends string> implements Closable {
   ) {
     this.redis = redisFactory();
 
-    this.redis.defineCommand("schedule", {
-      lua: fs.readFileSync(path.join(__dirname, "schedule.lua")).toString(),
-      numberOfKeys: 3,
-    });
-
-    this.redis.defineCommand("invoke", {
-      lua: fs.readFileSync(path.join(__dirname, "invoke.lua")).toString(),
-      numberOfKeys: 2,
-    });
-
-    this.redis.defineCommand("delete", {
-      lua: fs.readFileSync(path.join(__dirname, "delete.lua")).toString(),
-      numberOfKeys: 3,
-    });
+    defineLocalCommands(this.redis, __dirname);
 
     this.acknowledger = new Acknowledger(this.redis, onError);
     this.staleChecker = new StaleChecker(
@@ -181,9 +167,7 @@ export class Producer<ScheduleType extends string> implements Closable {
     const pipeline = this.redis.pipeline();
 
     for (const { queue, id } of ids) {
-      pipeline.hgetall(
-        `jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`
-      );
+      pipeline.hgetall(`jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`);
       pipeline.zscore(
         "queue",
         `${encodeRedisKey(queue)}:${encodeRedisKey(id)}`

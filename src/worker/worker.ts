@@ -1,8 +1,6 @@
 import { Redis } from "ioredis";
 import { Closable } from "../Closable";
 import { Job } from "../Job";
-import * as fs from "fs";
-import * as path from "path";
 import type { ScheduleMap } from "../index";
 import { computeTimestampForNextRetry } from "./retry";
 import {
@@ -12,6 +10,7 @@ import {
 } from "../shared/acknowledger";
 import { decodeRedisKey } from "../encodeRedisKey";
 import { JobDistributor } from "./job-distributor";
+import { defineLocalCommands } from "../redis-commands";
 
 declare module "ioredis" {
   interface Commands {
@@ -66,10 +65,7 @@ export class Worker implements Closable {
 
     this.acknowledger = new Acknowledger(this.redis, onError);
 
-    this.redis.defineCommand("request", {
-      lua: fs.readFileSync(path.join(__dirname, "request.lua")).toString(),
-      numberOfKeys: 4,
-    });
+    defineLocalCommands(this.redis, __dirname);
 
     this.redisSub.on("message", () => {
       setImmediate(() => {
