@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { delay, describeAcrossBackends, waitUntil } from "../util";
+import { describeAcrossBackends, waitUntil } from "../util";
 import { makeActivityEnv } from "./support";
 
 describeAcrossBackends("Activity", (backend) => {

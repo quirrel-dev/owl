@@ -11,6 +11,7 @@ import {
 import { decodeRedisKey, tenantToRedisPrefix } from "../encodeRedisKey";
 import { JobDistributor } from "./job-distributor";
 import { defineLocalCommands } from "../redis-commands";
+import RedisMock from "ioredis-mock";
 
 declare module "ioredis" {
   interface Commands {
@@ -42,6 +43,14 @@ export type Processor = (
   ackDescriptor: AcknowledgementDescriptor
 ) => Promise<void>;
 
+function parseTenantFromChannel(topic: string) {
+  if (topic.startsWith("{")) {
+    return topic.slice(1, topic.indexOf("}"));
+  }
+
+  return topic;
+}
+
 export class Worker implements Closable {
   private readonly redis;
   private readonly redisSub;
@@ -62,14 +71,24 @@ export class Worker implements Closable {
 
     defineLocalCommands(this.redis, __dirname);
 
-    this.redisSub.on("message", () => {
+    const handleMessage = (channel: string) => {
       setImmediate(() => {
-        this.distributor.checkForNewJobs("");
+        this.distributor.checkForNewJobs(parseTenantFromChannel(channel));
       });
-    });
+    };
+
+    if (this.redis instanceof RedisMock) {
+      this.redisSub.on("message", (channel) => {
+        handleMessage(channel);
+      });
+    } else {
+      this.redisSub.on("pmessage", (_pattern, channel) => {
+        handleMessage(channel);
+      });
+    }
 
     this.redisSub
-      .subscribe("scheduled", "invoked", "rescheduled", "unblocked")
+      .psubscribe("*scheduled", "*invoked", "*rescheduled", "*unblocked")
       .then(() => {
         this.distributor.start();
       });

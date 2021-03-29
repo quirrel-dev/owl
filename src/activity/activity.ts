@@ -56,12 +56,14 @@ interface ScheduledEvent {
 
 interface InvokedEvent {
   type: "invoked";
+  tenant: string;
   id: string;
   queue: string;
 }
 
 interface RescheduledEvent {
   type: "rescheduled";
+  tenant: string;
   id: string;
   queue: string;
   runAt: Date;
@@ -69,18 +71,21 @@ interface RescheduledEvent {
 
 interface DeletedEvent {
   type: "deleted";
+  tenant: string;
   id: string;
   queue: string;
 }
 
 interface RequestedEvent {
   type: "requested";
+  tenant: string;
   id: string;
   queue: string;
 }
 
 interface AcknowledgedEvent {
   type: "acknowledged";
+  tenant: string;
   id: string;
   queue: string;
 }
@@ -127,6 +132,12 @@ export class Activity<ScheduleType extends string> implements Closable {
     const [_type, ...args] = splitEvent(message, 9);
     const type = _type as OnActivityEvent["type"];
 
+    let tenant = "";
+    if (channel.startsWith("{")) {
+      tenant = channel.slice(1, channel.indexOf("}"));
+      channel = channel.slice(channel.indexOf("}") + 1);
+    }
+
     const channelParts = channel.split(":").map(decodeRedisKey);
     if (channelParts.length !== 2) {
       return;
@@ -148,7 +159,7 @@ export class Activity<ScheduleType extends string> implements Closable {
       await this.onEvent({
         type: "scheduled",
         job: {
-          tenant: this.tenant,
+          tenant,
           id,
           queue,
           payload,
@@ -169,6 +180,7 @@ export class Activity<ScheduleType extends string> implements Closable {
       const [runDate] = args;
       await this.onEvent({
         type: "rescheduled",
+        tenant,
         id,
         queue,
         runAt: new Date(+runDate),
@@ -176,6 +188,7 @@ export class Activity<ScheduleType extends string> implements Closable {
     } else {
       await this.onEvent({
         type,
+        tenant,
         id,
         queue,
       });

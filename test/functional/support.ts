@@ -131,6 +131,9 @@ export function makeWorkerEnv(
         onFinishedListeners.forEach((listener) => listener(job));
       }
     );
+
+    // worker needs time to scan for tenants
+    await delay(10)
   };
 
   workerEnv.teardown = async function teardown() {
