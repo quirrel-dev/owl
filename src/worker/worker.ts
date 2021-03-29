@@ -71,13 +71,19 @@ export class Worker implements Closable {
 
     defineLocalCommands(this.redis, __dirname);
 
+    this.listenForPubs();
+
+    this.distributor.start();
+  }
+
+  private listenForPubs() {
     const handleMessage = (channel: string) => {
       setImmediate(() => {
         this.distributor.checkForNewJobs(parseTenantFromChannel(channel));
       });
     };
 
-    if (this.redis instanceof RedisMock) {
+    if (this.redisSub instanceof RedisMock) {
       this.redisSub.on("message", (channel) => {
         handleMessage(channel);
       });
@@ -87,11 +93,12 @@ export class Worker implements Closable {
       });
     }
 
-    this.redisSub
-      .psubscribe("*scheduled", "*invoked", "*rescheduled", "*unblocked")
-      .then(() => {
-        this.distributor.start();
-      });
+    this.redisSub.psubscribe(
+      "*scheduled",
+      "*invoked",
+      "*rescheduled",
+      "*unblocked"
+    );
   }
 
   private getNextExecutionDate(
