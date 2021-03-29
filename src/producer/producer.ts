@@ -12,9 +12,6 @@ const debug = createDebug("owl:producer");
 declare module "ioredis" {
   interface Commands {
     schedule(
-      jobTableJobId: string,
-      jobTableIndexByQueue: string,
-      queueKey: string,
       id: string,
       queue: string,
       payload: string,
@@ -27,21 +24,9 @@ declare module "ioredis" {
       retryIntervals: string
     ): Promise<0 | 1>;
 
-    delete(
-      jobTableJobId: string,
-      jobTableIndexByQueue: string,
-      queueKey: string,
-      id: string,
-      queue: string
-    ): Promise<0 | 1>;
+    delete(id: string, queue: string): Promise<0 | 1>;
 
-    invoke(
-      jobTableJobId: string,
-      queueKey: string,
-      id: string,
-      queue: string,
-      newRunAt: number
-    ): Promise<0 | 1>;
+    invoke(id: string, queue: string, newRunAt: number): Promise<0 | 1>;
   }
 }
 
@@ -85,9 +70,6 @@ export class Producer<ScheduleType extends string> implements Closable {
     }
 
     await this.redis.schedule(
-      `jobs:${encodeRedisKey(job.queue)}:${encodeRedisKey(job.id)}`,
-      `queues:${encodeRedisKey(job.queue)}`,
-      "queue",
       encodeRedisKey(job.id),
       encodeRedisKey(job.queue),
       job.payload,
@@ -240,9 +222,6 @@ export class Producer<ScheduleType extends string> implements Closable {
 
   public async delete(queue: string, id: string) {
     const result = await this.redis.delete(
-      `jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`,
-      `queues:${encodeRedisKey(queue)}`,
-      "queue",
       encodeRedisKey(id),
       encodeRedisKey(queue)
     );
@@ -257,8 +236,6 @@ export class Producer<ScheduleType extends string> implements Closable {
 
   public async invoke(queue: string, id: string) {
     const result = await this.redis.invoke(
-      `jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`,
-      "queue",
       encodeRedisKey(id),
       encodeRedisKey(queue),
       Date.now()

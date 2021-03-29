@@ -6,34 +6,17 @@ import { defineLocalCommands } from "../redis-commands";
 const debug = createDebug("owl:acknowledger");
 
 declare module "ioredis" {
+  type AcknowledgeArgs = [
+    id: string,
+    queue: string,
+    timestampToRescheduleFor: number | undefined
+  ];
   interface Commands {
-    acknowledge(
-      jobTableQueueIdKey: string,
-      jobTableQueueIndex: string,
-      processingKey: string,
-      scheduledQueueKey: string,
-      blockedJobsKey: string,
-      blockedQueuesSetKey: string,
-      softBlockCounterKey: string,
-      id: string,
-      queue: string,
-      timestampToRescheduleFor: number | undefined
-    ): Promise<void>;
+    acknowledge(...args: AcknowledgeArgs): Promise<void>;
   }
 
   interface Pipeline {
-    acknowledge(
-      jobTableQueueIdKey: string,
-      jobTableQueueIndex: string,
-      processingKey: string,
-      scheduledQueueKey: string,
-      blockedJobsKey: string,
-      blockedQueuesSetKey: string,
-      softBlockCounterKey: string,
-      id: string,
-      queue: string,
-      timestampToRescheduleFor: number | undefined
-    ): this;
+    acknowledge(...args: AcknowledgeArgs): this;
   }
 }
 
@@ -73,18 +56,7 @@ export class Acknowledger {
     pipeline.publish(`${_queueId}:${_jobId}`, `${event}:${errorString}`);
     pipeline.publish(`${_queueId}:${_jobId}:${event}`, errorString);
 
-    pipeline.acknowledge(
-      `jobs:${_queueId}:${_jobId}`,
-      `queues:${_queueId}`,
-      "processing",
-      "queue",
-      `blocked:${_queueId}`,
-      "blocked-queues",
-      "soft-block",
-      _jobId,
-      _queueId,
-      timestampForNextRetry
-    );
+    pipeline.acknowledge(_jobId, _queueId, timestampForNextRetry);
 
     if (!isRetryable) {
       this.onError?.(descriptor, error);
@@ -107,13 +79,6 @@ export class Acknowledger {
     const { queueId, jobId, nextExecutionDate } = descriptor;
 
     await this.redis.acknowledge(
-      `jobs:${encodeRedisKey(queueId)}:${encodeRedisKey(jobId)}`,
-      `queues:${encodeRedisKey(queueId)}`,
-      "processing",
-      "queue",
-      `blocked:${encodeRedisKey(queueId)}`,
-      "blocked-queues",
-      "soft-block",
       encodeRedisKey(jobId),
       encodeRedisKey(queueId),
       options.dontReschedule ? undefined : nextExecutionDate

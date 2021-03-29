@@ -1,28 +1,22 @@
 -- Acknowledges a job.
 -- Removes it from the "processing" set.
 
-local jobTableJobKey = KEYS[1]
-local jobIndexByQueue = KEYS[2]
-local processingSet = KEYS[3]
-local queue = KEYS[4]
-local blockedJobs = KEYS[5]
-local blockedQueues = KEYS[6]
-local softBlockCounterHash = KEYS[7]
-
 local jobId = ARGV[1]
 local jobQueue = ARGV[2]
 local rescheduleFor = ARGV[3]
 
-redis.call("ZREM", processingSet, jobQueue .. ":" .. jobId)
+local jobTableJobKey = "jobs:" .. jobQueue .. ":" .. jobId
+
+redis.call("ZREM", "processing", jobQueue .. ":" .. jobId)
 
 redis.call("PUBLISH", jobQueue .. ":" .. jobId, "acknowledged")
 redis.call("PUBLISH", "acknowledged", jobQueue .. ":" .. jobId)
 
 if rescheduleFor == '' then
   redis.call("DEL", jobTableJobKey)
-  redis.call("SREM", jobIndexByQueue, jobId)
+  redis.call("SREM", "queues:" .. jobQueue, jobId)
 else
-  redis.call("ZADD", queue, rescheduleFor, jobQueue .. ":" .. jobId)
+  redis.call("ZADD", "queue", rescheduleFor, jobQueue .. ":" .. jobId)
 
   redis.call("HINCRBY", jobTableJobKey, "count", 1)
   
@@ -30,9 +24,10 @@ else
   redis.call("PUBLISH", "rescheduled", jobQueue .. ":" .. jobId)
 end
 
-redis.call("HINCRBY", softBlockCounterHash, jobQueue, -1)
+redis.call("HINCRBY", "soft-block", jobQueue, -1)
 
-local blocked = redis.call("ZRANGE", blockedJobs, 0, -1, "WITHSCORES")
+local blockedJobsByQueue = "blocked:" .. jobQueue
+local blocked = redis.call("ZRANGE", blockedJobsByQueue, 0, -1, "WITHSCORES")
 
 if #blocked > 0 then
   for i = 1, #blocked - 1, 2
@@ -40,10 +35,10 @@ if #blocked > 0 then
     local id = blocked[i]
     local score = blocked[i + 1]
 
-    redis.call("ZADD", queue, score, jobQueue .. ":" .. id)
+    redis.call("ZADD", "queue", score, jobQueue .. ":" .. id)
   end
 
-  redis.call("DEL", blockedJobs)
-  redis.call("SREM", blockedQueues, jobQueue)
+  redis.call("DEL", blockedJobsByQueue)
+  redis.call("SREM", "blocked-queues", jobQueue)
   redis.call("PUBLISH", "unblocked", jobQueue)
 end
