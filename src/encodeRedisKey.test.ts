@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { encodeRedisKey, decodeRedisKey } from "../../src/encodeRedisKey";
+import { encodeRedisKey, decodeRedisKey } from "./encodeRedisKey";
 
 const cases = [
   {

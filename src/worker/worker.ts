@@ -11,7 +11,7 @@ import {
   OnError,
 } from "../shared/acknowledger";
 import { decodeRedisKey } from "../encodeRedisKey";
-import { JobDistributor } from "../core/job-distributor";
+import { JobDistributor } from "./job-distributor";
 
 declare module "ioredis" {
   interface Commands {

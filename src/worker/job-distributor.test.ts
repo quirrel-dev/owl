@@ -202,7 +202,6 @@ describe(JobDistributor.name, () => {
             return ["empty"];
           },
           async (job) => {
-            console.log("Hello");
             throw new Error("Run failed!");
           }
         );
