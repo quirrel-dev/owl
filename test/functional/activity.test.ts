@@ -20,6 +20,7 @@ describeAcrossBackends("Activity", (backend) => {
     const currentDate = new Date();
 
     await env.producer.enqueue({
+      tenant: "",
       queue: "activity:queue",
       id: "a",
       payload: '{"lol":"lel"}',
@@ -27,6 +28,7 @@ describeAcrossBackends("Activity", (backend) => {
     });
 
     await env.producer.enqueue({
+      tenant: "",
       queue: "activity:queue",
       id: "b;wild",
       payload: "lol",
@@ -35,6 +37,7 @@ describeAcrossBackends("Activity", (backend) => {
     });
 
     await env.producer.enqueue({
+      tenant: "",
       queue: "activity:queue",
       id: "repeated",
       payload: "lol",
@@ -46,13 +49,14 @@ describeAcrossBackends("Activity", (backend) => {
       },
     });
 
-    await env.producer.delete("activity:queue", "b;wild");
+    await env.producer.delete("", "activity:queue", "b;wild");
 
     await expectEventsToEventuallyMatch(
       [
         {
           type: "scheduled",
           job: {
+            tenant: "",
             queue: "activity:queue",
             id: "a",
             payload: '{"lol":"lel"}',
@@ -74,6 +78,7 @@ describeAcrossBackends("Activity", (backend) => {
             schedule: undefined,
             exclusive: true,
             retry: [],
+            tenant: "",
           },
         },
         {
@@ -91,6 +96,7 @@ describeAcrossBackends("Activity", (backend) => {
               meta: "10",
               times: 2,
             },
+            tenant: "",
           },
         },
         {

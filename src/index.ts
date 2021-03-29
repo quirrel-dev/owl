@@ -51,10 +51,11 @@ export default class Owl<ScheduleType extends string> {
   }
 
   public createActivity(
+    tenant: string,
     onEvent: OnActivity,
     options: SubscriptionOptions = {}
   ) {
-    return new Activity<ScheduleType>(this.redisFactory, onEvent, options);
+    return new Activity<ScheduleType>(tenant, this.redisFactory, onEvent, options);
   }
 
   public async runMigrations() {

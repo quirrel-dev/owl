@@ -8,13 +8,14 @@ import {
   Acknowledger,
   OnError,
 } from "../shared/acknowledger";
-import { decodeRedisKey } from "../encodeRedisKey";
+import { decodeRedisKey, tenantToRedisPrefix } from "../encodeRedisKey";
 import { JobDistributor } from "./job-distributor";
 import { defineLocalCommands } from "../redis-commands";
 
 declare module "ioredis" {
   interface Commands {
     request(
+      tenantPrefix: string,
       currentTimestamp: number
     ): Promise<
       | [
@@ -99,7 +100,10 @@ export class Worker implements Closable {
   private readonly distributor = new JobDistributor(
     async () => [""],
     async (tenant) => {
-      const result = await this.redis.request(Date.now());
+      const result = await this.redis.request(
+        tenantToRedisPrefix(tenant),
+        Date.now()
+      );
 
       if (!result) {
         return ["empty"];
@@ -145,6 +149,7 @@ export class Worker implements Closable {
       const retry = JSON.parse(retryJSON ?? "[]") as number[];
 
       const job: Job = {
+        tenant,
         queue,
         id,
         payload,

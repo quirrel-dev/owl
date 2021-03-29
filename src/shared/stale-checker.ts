@@ -3,6 +3,7 @@ import { Closable } from "../Closable";
 import type { Producer } from "../producer/producer";
 import { computeTimestampForNextRetry } from "../worker/retry";
 import type { Acknowledger } from "./acknowledger";
+import { scanTenants } from "./scan-tenants";
 
 const oneMinute = 60 * 1000;
 
@@ -86,33 +87,45 @@ export class StaleChecker implements Closable {
       return;
     }
 
-    const staleJobs = await this.producer.findJobs(
-      staleJobDescriptors.map(this.parseJobDescriptor)
-    );
+    for await (const tenants of scanTenants(this.redis)) {
+      await Promise.all(
+        tenants.map(async (tenant) => {
+          const staleJobs = await this.producer.findJobs(
+            tenant,
+            staleJobDescriptors.map(this.parseJobDescriptor)
+          );
 
-    const pipeline = this.redis.pipeline();
+          const pipeline = this.redis.pipeline();
 
-    const error = "Job Timed Out";
+          const error = "Job Timed Out";
 
-    for (const job of staleJobs) {
-      if (!job) {
-        console.error(new Error("Expected job to still exist"));
-        continue;
-      }
+          for (const job of staleJobs) {
+            if (!job) {
+              console.error(new Error("Expected job to still exist"));
+              continue;
+            }
 
-      const timestampForNextRetry = computeTimestampForNextRetry(
-        job.runAt,
-        job.retry,
-        job.count
-      );
+            const timestampForNextRetry = computeTimestampForNextRetry(
+              job.runAt,
+              job.retry,
+              job.count
+            );
 
-      this.acknowledger._reportFailure(
-        { queueId: job.queue, jobId: job.id, timestampForNextRetry },
-        error,
-        pipeline
+            this.acknowledger._reportFailure(
+              {
+                tenant,
+                queueId: job.queue,
+                jobId: job.id,
+                timestampForNextRetry,
+              },
+              error,
+              pipeline
+            );
+          }
+
+          await pipeline.exec();
+        })
       );
     }
-
-    await pipeline.exec();
   }
 }

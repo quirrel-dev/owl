@@ -19,6 +19,7 @@ describeAcrossBackends("stale-check", (backend) => {
     });
 
     await env.producer.enqueue({
+      tenant: "",
       id: "stalling-job",
       payload: "i am stalling, just like susanne",
       queue: "stally-stall",
@@ -33,6 +34,7 @@ describeAcrossBackends("stale-check", (backend) => {
     expect(env.errors).to.deep.equal([
       [
         {
+          tenant: "",
           jobId: "stalling-job",
           queueId: "stally-stall",
           timestampForNextRetry: undefined,
@@ -54,6 +56,7 @@ describeAcrossBackends("stale-check", (backend) => {
     });
 
     await env.producer.enqueue({
+      tenant: "",
       id: "retryable-stalling-job",
       payload: "i am stalling, just like susanne",
       queue: "retry-stally-stall",
@@ -68,7 +71,7 @@ describeAcrossBackends("stale-check", (backend) => {
     await env.producer.staleChecker.check();
     expect(env.errors).to.deep.equal([]);
 
-    await waitUntil(() => calls === 2, 500)
+    await waitUntil(() => calls === 2, 500);
 
     await worker.close();
   });
@@ -81,6 +84,7 @@ describeAcrossBackends("stale-check", (backend) => {
     });
 
     await env.producer.enqueue({
+      tenant: "",
       id: "non-stalling-job",
       payload: "i am not stalling",
       queue: "unstally-stall",

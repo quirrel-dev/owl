@@ -1,7 +1,11 @@
 import { Redis } from "ioredis";
 import RedisMock from "ioredis-mock";
 import { Closable } from "../Closable";
-import { decodeRedisKey, encodeRedisKey } from "../encodeRedisKey";
+import {
+  decodeRedisKey,
+  encodeRedisKey,
+  tenantToRedisPrefix,
+} from "../encodeRedisKey";
 import { Job } from "../Job";
 import { Producer } from "../producer/producer";
 
@@ -86,6 +90,7 @@ export class Activity<ScheduleType extends string> implements Closable {
   private producer;
 
   constructor(
+    public readonly tenant: string,
     redisFactory: () => Redis,
     private readonly onEvent: OnActivity,
     options: SubscriptionOptions = {}
@@ -111,7 +116,11 @@ export class Activity<ScheduleType extends string> implements Closable {
       options.id = encodeRedisKey(options.id);
     }
 
-    this.redis.psubscribe(`${options.queue ?? "*"}:${options.id ?? "*"}`);
+    this.redis.psubscribe(
+      `${tenantToRedisPrefix(tenant)}${options.queue ?? "*"}:${
+        options.id ?? "*"
+      }`
+    );
   }
 
   private async handleMessage(channel: string, message: string) {
@@ -139,6 +148,7 @@ export class Activity<ScheduleType extends string> implements Closable {
       await this.onEvent({
         type: "scheduled",
         job: {
+          tenant: this.tenant,
           id,
           queue,
           payload,
