@@ -15,13 +15,7 @@ import { defineLocalCommands } from "../redis-commands";
 declare module "ioredis" {
   interface Commands {
     request(
-      queueKey: string,
-      processingKey: string,
-      blockedQueuesKey: string,
-      softBlockCounterKey: string,
-      jobTablePrefix: string,
-      currentTimestamp: number,
-      blockedQueuesPrefix: string
+      currentTimestamp: number
     ): Promise<
       | [
           queue: string,
@@ -104,15 +98,7 @@ export class Worker implements Closable {
 
   private readonly distributor = new JobDistributor(
     async () => {
-      const result = await this.redis.request(
-        "queue",
-        "processing",
-        "blocked-queues",
-        "soft-block",
-        "jobs",
-        Date.now(),
-        "blocked"
-      );
+      const result = await this.redis.request(Date.now());
 
       if (!result) {
         return ["empty"];

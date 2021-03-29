@@ -2,19 +2,12 @@
 -- Moves it to the "processing" set.
 -- Returns its data.
 
-local queueKey = KEYS[1]
-local processing = KEYS[2]
-local hardBlockedQueues = KEYS[3]
-local softBlockCounterHash = KEYS[4]
-
-local jobTablePrefix = ARGV[1]
-local currentTimestamp = tonumber(ARGV[2])
-local blockedQueuesPrefix = ARGV[3]
+local currentTimestamp = tonumber(ARGV[1])
 
 local NO_JOB_FOUND = nil
 local JOB_FOUND_BUT_BLOCKED = -1
 
-local result = redis.call("ZRANGE", queueKey, 0, 0, "WITHSCORES")
+local result = redis.call("ZRANGE", "queue", 0, 0, "WITHSCORES")
 local queueAndId = result[1]
 local scoreString = result[2]
 
@@ -30,15 +23,15 @@ end
 
 local queue, id = queueAndId:match("([^,]+):([^,]+)")
 
-redis.call("ZREM", queueKey, queueAndId)
+redis.call("ZREM", "queue", queueAndId)
 
-if redis.call("SISMEMBER", hardBlockedQueues, queue) == 1 then
-  redis.call("ZADD", blockedQueuesPrefix .. ":" .. queue, scoreString, id)
+if redis.call("SISMEMBER", "blocked-queues", queue) == 1 then
+  redis.call("ZADD", "blocked:" .. queue, scoreString, id)
   return JOB_FOUND_BUT_BLOCKED
 end
 
 local jobData = redis.call(
-  "HMGET", jobTablePrefix .. ":" .. queueAndId,
+  "HMGET", "jobs:" .. queueAndId,
   "payload", "schedule_type", "schedule_meta",
   "count", "max_times", "exclusive", "retry"
 )
@@ -52,19 +45,19 @@ local exclusive = jobData[6]
 local retry = jobData[7]
 
 if exclusive == "true" then
-  redis.call("SADD", hardBlockedQueues, queue)
+  redis.call("SADD", "blocked-queues", queue)
 
-  local currentlyExecutingJobs = redis.call("HGET", softBlockCounterHash, queue)
+  local currentlyExecutingJobs = redis.call("HGET", "soft-block", queue)
   if currentlyExecutingJobs ~= false and currentlyExecutingJobs ~= "0" then
-    redis.call("ZADD", blockedQueuesPrefix .. ":" .. queue, scoreString, id)
+    redis.call("ZADD", "blocked:" .. queue, scoreString, id)
     return JOB_FOUND_BUT_BLOCKED
   end
 end
 
-redis.call("HINCRBY", softBlockCounterHash, queue, 1)
+redis.call("HINCRBY", "soft-block", queue, 1)
 
 local time = redis.call("TIME")[1]
-redis.call("ZADD", processing, time, queueAndId)
+redis.call("ZADD", "processing", time, queueAndId)
 
 -- publishes "requested" to "<queue>:<id>"
 redis.call("PUBLISH", queue .. ":" .. id, "requested")
