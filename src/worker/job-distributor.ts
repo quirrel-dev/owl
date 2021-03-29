@@ -1,7 +1,6 @@
 import { Closable } from "../Closable";
 
 export class JobDistributor<T> implements Closable {
-  private readonly tenants = new Set<string>();
   private readonly jobs = new Set<T>();
 
   get load() {
@@ -13,7 +12,7 @@ export class JobDistributor<T> implements Closable {
   }
 
   constructor(
-    private readonly fetchInitialTenants: () => Promise<string[]>,
+    private readonly fetchInitialTenants: () => AsyncGenerator<string[]>,
     private readonly fetch: (
       tenant: string
     ) => Promise<
@@ -25,9 +24,11 @@ export class JobDistributor<T> implements Closable {
   ) {}
 
   public async start() {
-    const initialTenants = await this.fetchInitialTenants();
-    initialTenants.forEach((t) => this.tenants.add(t));
-    await Promise.all(initialTenants.map((t) => this.checkForNewJobs(t)));
+    const promises: Promise<void>[] = [];
+    for await (const tenants of this.fetchInitialTenants()) {
+      promises.push(...tenants.map((t) => this.checkForNewJobs(t)));
+    }
+    await Promise.all(promises);
   }
 
   private async workOn(job: T, tenant: string) {

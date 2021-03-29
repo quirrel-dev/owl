@@ -31,7 +31,9 @@ describe(JobDistributor.name, () => {
     const workedJobs: string[] = [];
 
     const distributor = new JobDistributor<string>(
-      async () => [""],
+      async function* () {
+        yield [""];
+      },
       async () => {
         if (availableJobs.length === 0) {
           return ["empty"];
@@ -55,7 +57,9 @@ describe(JobDistributor.name, () => {
     let fetchCount = 0;
     const blocker = makeBlocker();
     const distributor = new JobDistributor(
-      async () => [""],
+      async function* () {
+        yield [""];
+      },
       async () => {
         fetchCount++;
 
@@ -102,7 +106,9 @@ describe(JobDistributor.name, () => {
     let fetchCount = 0;
     const blocker = makeBlocker();
     const distributor = new JobDistributor(
-      async () => [""],
+      async function* () {
+        yield [""];
+      },
       async () => {
         fetchCount++;
 
@@ -136,7 +142,9 @@ describe(JobDistributor.name, () => {
     let fetchCount = 0;
     const blocker = makeBlocker();
     const distributor = new JobDistributor(
-      async () => [""],
+      async function* () {
+        yield [""];
+      },
       async () => {
         fetchCount++;
         log.push("fetch:" + fetchCount);
@@ -164,7 +172,9 @@ describe(JobDistributor.name, () => {
     const queue = ["a", "block"];
 
     const distributor = new JobDistributor(
-      async () => [""],
+      async function* () {
+        yield [""];
+      },
       async () => {
         log.push("fetch");
         const item = queue.pop();
@@ -197,7 +207,9 @@ describe(JobDistributor.name, () => {
     describe("during fetching", () => {
       it("throws", async () => {
         const distributor = new JobDistributor(
-          async () => [""],
+          async function* () {
+            yield [""];
+          },
           async () => {
             throw new Error("Fetch failed!");
           },
@@ -234,7 +246,9 @@ describe(JobDistributor.name, () => {
       it("console.errors", async () => {
         let call = 0;
         const distributor = new JobDistributor(
-          async () => [""],
+          async function* () {
+            yield [""];
+          },
           async () => {
             call++;
             if (call === 1) {
@@ -267,9 +281,9 @@ describe(JobDistributor.name, () => {
     const log: string[] = [];
 
     const distributor = new JobDistributor(
-      async () => {
+      async function* () {
         log.push("fetch-initial-tenants");
-        return Object.keys(tenants);
+        yield Object.keys(tenants);
       },
       async (tenant: string) => {
         const queue = tenants[tenant];

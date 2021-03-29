@@ -12,6 +12,7 @@ import { decodeRedisKey, tenantToRedisPrefix } from "../encodeRedisKey";
 import { JobDistributor } from "./job-distributor";
 import { defineLocalCommands } from "../redis-commands";
 import RedisMock from "ioredis-mock";
+import { scanTenants } from "../shared/scan-tenants";
 
 declare module "ioredis" {
   interface Commands {
@@ -124,7 +125,7 @@ export class Worker implements Closable {
   }
 
   private readonly distributor = new JobDistributor(
-    async () => [""],
+    () => scanTenants(this.redis),
     async (tenant) => {
       const result = await this.redis.request(
         tenantToRedisPrefix(tenant),
