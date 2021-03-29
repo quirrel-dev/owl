@@ -1,6 +1,7 @@
 import { Closable } from "../Closable";
 
 export class JobDistributor<T> implements Closable {
+  private readonly tenants = new Set<string>();
   private readonly jobs = new Set<T>();
 
   get load() {
@@ -12,50 +13,59 @@ export class JobDistributor<T> implements Closable {
   }
 
   constructor(
-    private readonly fetch: () => Promise<
+    private readonly fetchInitialTenants: () => Promise<string[]>,
+    private readonly fetch: (
+      tenant: string
+    ) => Promise<
       ["empty"] | ["retry"] | ["success", T] | ["wait", Promise<void>]
     >,
-    private readonly run: (job: T) => Promise<void>,
+    private readonly run: (job: T, tenant: string) => Promise<void>,
     public readonly maxJobs: number = 100,
     private readonly autoCheckEvery: number = 1000
   ) {}
 
-  private async workOn(job: T) {
+  public async start() {
+    const initialTenants = await this.fetchInitialTenants();
+    initialTenants.forEach((t) => this.tenants.add(t));
+    await Promise.all(initialTenants.map((t) => this.checkForNewJobs(t)));
+  }
+
+  private async workOn(job: T, tenant: string) {
     this.jobs.add(job);
 
     try {
-      await this.run(job);
+      await this.run(job, tenant);
     } catch (e) {
       console.error(e);
     }
 
     this.jobs.delete(job);
 
-    this.checkForNewJobs();
+    this.checkForNewJobs(tenant);
   }
-
-  autoCheckId?: NodeJS.Timeout;
 
   // DI for testing
   setTimeout: (cb: () => void, timeout: number) => NodeJS.Timeout =
     global.setTimeout;
 
-  private delayAutoCheck() {
-    if (this.autoCheckId) {
-      clearInterval(this.autoCheckId);
+  autoCheckIds: Record<string, NodeJS.Timeout> = {};
+
+  private delayAutoCheck(tenant: string) {
+    if (this.autoCheckIds[tenant]) {
+      clearInterval(this.autoCheckIds[tenant]);
     }
 
-    this.autoCheckId = this.setTimeout(
-      () => this.checkForNewJobs(),
+    this.autoCheckIds[tenant] = this.setTimeout(
+      () => this.checkForNewJobs(tenant),
       this.autoCheckEvery
     );
   }
 
-  public async checkForNewJobs() {
-    this.delayAutoCheck();
+  public async checkForNewJobs(tenant: string) {
+    this.delayAutoCheck(tenant);
 
     while (!this.isPacked) {
-      const result = await this.fetch();
+      const result = await this.fetch(tenant);
       switch (result[0]) {
         case "empty": {
           return;
@@ -63,7 +73,7 @@ export class JobDistributor<T> implements Closable {
 
         case "success": {
           const job = result[1];
-          this.workOn(job);
+          this.workOn(job, tenant);
           continue;
         }
 
@@ -80,9 +90,7 @@ export class JobDistributor<T> implements Closable {
     }
   }
 
-  async close() {
-    if (this.autoCheckId) {
-      clearInterval(this.autoCheckId);
-    }
+  close() {
+    Object.values(this.autoCheckIds).forEach(clearInterval);
   }
 }

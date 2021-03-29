@@ -21,6 +21,7 @@ declare module "ioredis" {
 }
 
 export interface AcknowledgementDescriptor {
+  tenant: string;
   queueId: string;
   jobId: string;
   timestampForNextRetry?: number;

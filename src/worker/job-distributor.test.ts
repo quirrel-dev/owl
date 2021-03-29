@@ -31,6 +31,7 @@ describe(JobDistributor.name, () => {
     const workedJobs: string[] = [];
 
     const distributor = new JobDistributor<string>(
+      async () => [""],
       async () => {
         if (availableJobs.length === 0) {
           return ["empty"];
@@ -43,7 +44,7 @@ describe(JobDistributor.name, () => {
       }
     );
 
-    await distributor.checkForNewJobs();
+    await distributor.start();
 
     expect(workedJobs).to.eql(["c", "b", "a"]);
   });
@@ -54,6 +55,7 @@ describe(JobDistributor.name, () => {
     let fetchCount = 0;
     const blocker = makeBlocker();
     const distributor = new JobDistributor(
+      async () => [""],
       async () => {
         fetchCount++;
 
@@ -74,7 +76,7 @@ describe(JobDistributor.name, () => {
       3
     );
 
-    distributor.checkForNewJobs();
+    distributor.start();
 
     await tick();
 
@@ -100,6 +102,7 @@ describe(JobDistributor.name, () => {
     let fetchCount = 0;
     const blocker = makeBlocker();
     const distributor = new JobDistributor(
+      async () => [""],
       async () => {
         fetchCount++;
 
@@ -117,7 +120,8 @@ describe(JobDistributor.name, () => {
       }
     );
 
-    distributor.checkForNewJobs();
+    distributor.start();
+    await tick();
 
     expect(log).to.eql([]);
 
@@ -132,6 +136,7 @@ describe(JobDistributor.name, () => {
     let fetchCount = 0;
     const blocker = makeBlocker();
     const distributor = new JobDistributor(
+      async () => [""],
       async () => {
         fetchCount++;
         log.push("fetch:" + fetchCount);
@@ -145,7 +150,7 @@ describe(JobDistributor.name, () => {
       return null as any;
     };
 
-    await distributor.checkForNewJobs();
+    await distributor.start();
 
     expect(log).to.eql(["fetch:1"]);
 
@@ -159,6 +164,7 @@ describe(JobDistributor.name, () => {
     const queue = ["a", "block"];
 
     const distributor = new JobDistributor(
+      async () => [""],
       async () => {
         log.push("fetch");
         const item = queue.pop();
@@ -182,7 +188,7 @@ describe(JobDistributor.name, () => {
       return null as any;
     };
 
-    await distributor.checkForNewJobs();
+    await distributor.start();
 
     expect(log).to.eql(["fetch", "fetch", "work:a", "fetch", "fetch"]);
   });
@@ -191,6 +197,7 @@ describe(JobDistributor.name, () => {
     describe("during fetching", () => {
       it("throws", async () => {
         const distributor = new JobDistributor(
+          async () => [""],
           async () => {
             throw new Error("Fetch failed!");
           },
@@ -202,7 +209,7 @@ describe(JobDistributor.name, () => {
         };
 
         try {
-          await distributor.checkForNewJobs();
+          await distributor.start();
 
           expect(false).to.be.true;
         } catch (error) {
@@ -227,6 +234,7 @@ describe(JobDistributor.name, () => {
       it("console.errors", async () => {
         let call = 0;
         const distributor = new JobDistributor(
+          async () => [""],
           async () => {
             call++;
             if (call === 1) {
@@ -243,10 +251,64 @@ describe(JobDistributor.name, () => {
           return null as any;
         };
 
-        await distributor.checkForNewJobs();
+        await distributor.start();
 
         expect(errors).to.eql([["Error: Run failed!"]]);
       });
     });
+  });
+
+  it("Cluster-Mode", async () => {
+    const tenants: Record<string, string[]> = {
+      a: ["a2", "block", "a1"],
+      b: ["b1"],
+    };
+
+    const log: string[] = [];
+
+    const distributor = new JobDistributor(
+      async () => {
+        log.push("fetch-initial-tenants");
+        return Object.keys(tenants);
+      },
+      async (tenant: string) => {
+        const queue = tenants[tenant];
+        const item = queue.pop();
+        if (!item) {
+          log.push("fetch:" + tenant + ":empty");
+          return ["empty"];
+        }
+
+        if (item === "block") {
+          log.push("fetch:" + tenant + ":retry");
+          return ["retry"];
+        }
+
+        log.push("fetch:" + tenant + ":success");
+
+        return ["success", item];
+      },
+      async (job, tenant) => {
+        log.push("work:" + tenant + ":" + job);
+      }
+    );
+
+    await distributor.start();
+
+    expect(log).to.eql([
+      "fetch-initial-tenants",
+      "fetch:a:success",
+      "fetch:b:success",
+      "work:a:a1",
+      "fetch:a:retry",
+      "work:b:b1",
+      "fetch:b:empty",
+      "fetch:a:success",
+      "fetch:a:empty",
+      "fetch:b:empty",
+      "work:a:a2",
+      "fetch:a:empty",
+      "fetch:a:empty",
+    ]);
   });
 });

@@ -63,14 +63,14 @@ export class Worker implements Closable {
 
     this.redisSub.on("message", () => {
       setImmediate(() => {
-        this.distributor.checkForNewJobs();
+        this.distributor.checkForNewJobs("");
       });
     });
 
     this.redisSub
       .subscribe("scheduled", "invoked", "rescheduled", "unblocked")
       .then(() => {
-        this.distributor.checkForNewJobs();
+        this.distributor.start();
       });
   }
 
@@ -97,7 +97,8 @@ export class Worker implements Closable {
   }
 
   private readonly distributor = new JobDistributor(
-    async () => {
+    async () => [""],
+    async (tenant) => {
       const result = await this.redis.request(Date.now());
 
       if (!result) {
@@ -125,7 +126,7 @@ export class Worker implements Closable {
 
       return ["success", result];
     },
-    async (result) => {
+    async (result, tenant) => {
       const [
         _queue,
         _id,
@@ -171,6 +172,7 @@ export class Worker implements Closable {
       }
 
       const ackDescriptor: AcknowledgementDescriptor = {
+        tenant,
         jobId: job.id,
         queueId: job.queue,
         timestampForNextRetry: computeTimestampForNextRetry(
@@ -191,7 +193,7 @@ export class Worker implements Closable {
   );
 
   public async close() {
-    await this.distributor.close();
+    this.distributor.close();
     await this.redis.quit();
     await this.redisSub.quit();
   }
