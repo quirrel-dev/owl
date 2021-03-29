@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { OnActivityEvent } from "../../src/activity/activity";
-import { delay, describeAcrossBackends, waitUntil } from "../util";
+import { describeAcrossBackends, waitUntil } from "../util";
 import { makeActivityEnv } from "./support";
 
 function expectInOrder(numbers: number[]) {
@@ -29,17 +29,7 @@ describeAcrossBackends("Exclusive", (backend) => {
     id: string,
     maxWait: number = 50
   ) {
-    await waitUntil(
-      () =>
-        env.events.some((ev) => {
-          if (ev.type === "scheduled") {
-            return ev.type === type && ev.job.id === id;
-          }
-
-          return ev.type === type && ev.id === id;
-        }),
-      maxWait
-    );
+    await waitUntil(() => eventIndex(type, id) !== -1, maxWait);
   }
 
   describe("exclusive: false", () => {

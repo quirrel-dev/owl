@@ -154,6 +154,39 @@ describe(JobDistributor.name, () => {
     expect(log).to.eql(["fetch:1", "fetch:2"]);
   });
 
+  it("retries when blocked", async () => {
+    const log: string[] = [];
+    const queue = ["a", "block"];
+
+    const distributor = new JobDistributor(
+      async () => {
+        log.push("fetch");
+        const item = queue.pop();
+
+        if (!item) {
+          return ["empty"];
+        }
+
+        if (item === "block") {
+          return ["retry"];
+        }
+
+        return ["success", item];
+      },
+      async (job) => {
+        log.push("work:" + job);
+      }
+    );
+
+    distributor.setTimeout = (cb) => {
+      return null as any;
+    };
+
+    await distributor.checkForNewJobs();
+
+    expect(log).to.eql(["fetch", "fetch", "work:a", "fetch", "fetch"]);
+  });
+
   describe("error handling", () => {
     describe("during fetching", () => {
       it("throws", async () => {
@@ -216,6 +249,4 @@ describe(JobDistributor.name, () => {
       });
     });
   });
-
-  it("deals with errors during execution", () => {});
 });

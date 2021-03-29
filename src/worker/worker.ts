@@ -119,7 +119,7 @@ export class Worker implements Closable {
       }
 
       if (result === -1) {
-        return ["empty"];
+        return ["retry"];
       }
 
       if (typeof result === "number") {

@@ -13,7 +13,7 @@ export class JobDistributor<T> implements Closable {
 
   constructor(
     private readonly fetch: () => Promise<
-      ["empty"] | ["success", T] | ["wait", Promise<void>]
+      ["empty"] | ["retry"] | ["success", T] | ["wait", Promise<void>]
     >,
     private readonly run: (job: T) => Promise<void>,
     public readonly maxJobs: number = 100,
@@ -22,7 +22,7 @@ export class JobDistributor<T> implements Closable {
 
   private async workOn(job: T) {
     this.jobs.add(job);
-    
+
     try {
       await this.run(job);
     } catch (e) {
@@ -70,6 +70,10 @@ export class JobDistributor<T> implements Closable {
         case "wait": {
           const waitFor = result[1];
           await waitFor;
+          continue;
+        }
+
+        case "retry": {
           continue;
         }
       }
