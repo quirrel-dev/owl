@@ -3,7 +3,7 @@ import { Producer } from "./producer/producer";
 import { Processor, Worker } from "./worker/worker";
 import { Activity, OnActivity, SubscriptionOptions } from "./activity/activity";
 import { OnError } from "./shared/acknowledger";
-import { migrate } from "./shared/migrator";
+import { migrate } from "./shared/migrator/migrator";
 import { StaleCheckerConfig } from "./shared/stale-checker";
 
 export { Job, JobEnqueue } from "./Job";
