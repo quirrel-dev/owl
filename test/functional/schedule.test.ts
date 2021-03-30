@@ -69,7 +69,9 @@ describeAcrossBackends("Schedule", (backend) => {
 
         await delay(100);
 
-        expect(env.jobs.length).to.equal(5);
+        expect(
+          env.jobs.filter(([, job]) => job.queue === "scheduled-times").length
+        ).to.equal(5);
       });
     });
   });
