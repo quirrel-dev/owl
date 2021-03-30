@@ -71,13 +71,14 @@ export class Worker implements Closable {
     this.acknowledger = new Acknowledger(this.redis, onError);
 
     defineLocalCommands(this.redis, __dirname);
+  }
 
-    this.listenForPubs();
-
+  public async start() {
+    await this.listenForPubs();
     this.distributor.start();
   }
 
-  private listenForPubs() {
+  private async listenForPubs() {
     const handleMessage = (channel: string) => {
       setImmediate(() => {
         this.distributor.checkForNewJobs(parseTenantFromChannel(channel));
@@ -94,7 +95,7 @@ export class Worker implements Closable {
       });
     }
 
-    this.redisSub.psubscribe(
+    await this.redisSub.psubscribe(
       "*scheduled",
       "*invoked",
       "*rescheduled",

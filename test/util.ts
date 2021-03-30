@@ -40,7 +40,7 @@ function removeFirstStackLine(string: string): string {
 }
 
 export function waitUntil(
-  predicate: () => boolean,
+  predicate: () => boolean | Promise<boolean>,
   butMax: number,
   interval = 20
 ) {
@@ -53,8 +53,13 @@ export function waitUntil(
   potentialError.stack = removeFirstStackLine(potentialError.stack);
 
   return new Promise<void>((resolve, reject) => {
-    const check = setInterval(() => {
-      if (predicate()) {
+    const check = setInterval(async () => {
+      let result = predicate();
+      if (typeof result !== "boolean") {
+        result = await result;
+      }
+
+      if (result) {
         clearInterval(check);
         clearTimeout(max);
         resolve();

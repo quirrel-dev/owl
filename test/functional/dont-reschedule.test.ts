@@ -14,13 +14,12 @@ describeAcrossBackends("dontReschedule", (backend) => {
 
   it("works", async () => {
     const acknowledged = makeSignal();
-    worker = producerEnv.owl.createWorker(async (job, meta) => {
+    worker = await producerEnv.owl.createWorker(async (job, meta) => {
       await worker.acknowledger.acknowledge(meta, {
         dontReschedule: true,
       });
       acknowledged.signal();
     });
-    await delay(10);
 
     await producerEnv.producer.enqueue({
       tenant: "",

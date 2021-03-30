@@ -25,6 +25,8 @@ const worker = owl.createWorker(async (job, ackDescriptor) => {
   await worker.acknowledger.acknowledge(ackDescriptor);
 })
 
+await worker.start();
+
 const producer = owl.createProducer()
 
 await producer.enqueue({

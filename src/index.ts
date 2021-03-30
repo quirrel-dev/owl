@@ -33,13 +33,17 @@ export default class Owl<ScheduleType extends string> {
     this.onError = config.onError;
   }
 
-  public createWorker(processor: Processor) {
-    return new Worker(
+  public async createWorker(processor: Processor) {
+    const worker = new Worker(
       this.redisFactory,
       this.scheduleMap ?? {},
       processor,
       this.onError
     );
+
+    await worker.start();
+
+    return worker;
   }
 
   public createProducer() {
@@ -55,7 +59,12 @@ export default class Owl<ScheduleType extends string> {
     onEvent: OnActivity,
     options: SubscriptionOptions = {}
   ) {
-    return new Activity<ScheduleType>(tenant, this.redisFactory, onEvent, options);
+    return new Activity<ScheduleType>(
+      tenant,
+      this.redisFactory,
+      onEvent,
+      options
+    );
   }
 
   public async runMigrations() {

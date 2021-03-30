@@ -108,7 +108,7 @@ export function makeWorkerEnv(
     onStartedListeners = [];
     onFinishedListeners = [];
 
-    workerEnv.worker = producerEnv.owl.createWorker(
+    workerEnv.worker = await producerEnv.owl.createWorker(
       async (job, ackDescriptor) => {
         onStartedListeners.forEach((listener) => listener(job));
 
@@ -131,9 +131,6 @@ export function makeWorkerEnv(
         onFinishedListeners.forEach((listener) => listener(job));
       }
     );
-
-    // worker needs time to scan for tenants
-    await delay(10);
   };
 
   workerEnv.teardown = async function teardown() {

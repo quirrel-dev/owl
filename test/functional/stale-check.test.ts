@@ -19,11 +19,11 @@ describeAcrossBackends("stale-check", (backend) => {
   let worker: Worker;
 
   it("emits errors for stalling jobs", async () => {
-    const received = makeSignal()
-    worker = env.owl.createWorker(async (job) => {
+    const received = makeSignal();
+    worker = await env.owl.createWorker(async (job) => {
       // happily takes jobs, but never acknowledges any of them
       // simulating a dying worker
-      received.signal()
+      received.signal();
     });
 
     await env.producer.enqueue({
@@ -33,10 +33,10 @@ describeAcrossBackends("stale-check", (backend) => {
       queue: "stally-stall",
     });
 
-    await received
+    await received;
 
-    await waitUntil(() => {
-      env.producer.staleChecker.check();
+    await waitUntil(async () => {
+      await env.producer.staleChecker.check();
       return env.errors.length === 1;
     }, 1000);
 
@@ -54,14 +54,14 @@ describeAcrossBackends("stale-check", (backend) => {
   });
 
   it("reschedules jobs with retry", async function () {
-    const received = makeSignal()
+    const received = makeSignal();
     let calls = 0;
-    worker = env.owl.createWorker(async (job, ack) => {
+    worker = await env.owl.createWorker(async (job, ack) => {
       calls++;
       if (job.count > 1) {
         await worker.acknowledger.acknowledge(ack);
       } else {
-        received.signal()
+        received.signal();
       }
     });
 
@@ -73,10 +73,10 @@ describeAcrossBackends("stale-check", (backend) => {
       retry: [100],
     });
 
-    await received
+    await received;
 
-    await waitUntil(() => {
-      env.producer.staleChecker.check();
+    await waitUntil(async () => {
+      await env.producer.staleChecker.check();
       return calls === 2;
     }, 500);
 
@@ -84,7 +84,7 @@ describeAcrossBackends("stale-check", (backend) => {
   });
 
   it("does not emit errors if everything is fine", async () => {
-    worker = env.owl.createWorker(async (job, ack) => {
+    worker = await env.owl.createWorker(async (job, ack) => {
       setTimeout(() => {
         worker.acknowledger.acknowledge(ack);
       }, 50);
