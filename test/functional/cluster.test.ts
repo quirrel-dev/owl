@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { Closable } from "../../src";
 import { delay, describeAcrossBackends, waitUntil } from "../util";
 import { makeWorkerEnv } from "./support";
 
@@ -6,18 +7,25 @@ describeAcrossBackends("Cluster", (backend) => {
   const env = makeWorkerEnv(backend);
 
   beforeEach(env.setup);
-  afterEach(env.teardown);
+  afterEach(async () => {
+    await env.teardown();
+    await Promise.all(closables.map((c) => c.close()));
+  });
+
+  let closables: Closable[] = [];
 
   it("works with two tenants", async () => {
     const eventsA: any[] = [];
     const activityA = env.owl.createActivity("a", (ev) => {
       eventsA.push(ev);
     });
+    closables.push(activityA);
 
     const eventsB: any[] = [];
     const activityB = env.owl.createActivity("b", (ev) => {
       eventsB.push(ev);
     });
+    closables.push(activityB);
 
     await delay(10);
 
@@ -45,9 +53,6 @@ describeAcrossBackends("Cluster", (backend) => {
       queue: "a1",
       id: "a1.1",
     });
-
-    await activityA.close();
-    await activityB.close();
   });
 
   it("supports invocation", async () => {

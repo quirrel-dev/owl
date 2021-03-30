@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { Worker } from "../../src/worker/worker";
 import { delay, describeAcrossBackends, waitUntil } from "../util";
 import { makeProducerEnv } from "./support";
 
@@ -10,10 +11,15 @@ describeAcrossBackends("stale-check", (backend) => {
     },
   });
   beforeEach(env.setup);
-  afterEach(env.teardown);
+  afterEach(async () => {
+    await worker.close();
+    await env.teardown();
+  });
+
+  let worker: Worker;
 
   it("emits errors for stalling jobs", async () => {
-    const worker = env.owl.createWorker(async () => {
+    worker = env.owl.createWorker(async () => {
       // happily takes jobs, but never acknowledges any of them
       // simulating a dying worker
     });
@@ -42,13 +48,11 @@ describeAcrossBackends("stale-check", (backend) => {
         "Job Timed Out",
       ],
     ]);
-
-    await worker.close();
   });
 
   it("reschedules jobs with retry", async () => {
     let calls = 0;
-    const worker = env.owl.createWorker(async (job, ack) => {
+    worker = env.owl.createWorker(async (job, ack) => {
       calls++;
       if (job.count > 1) {
         await worker.acknowledger.acknowledge(ack);
@@ -71,13 +75,11 @@ describeAcrossBackends("stale-check", (backend) => {
     await env.producer.staleChecker.check();
     expect(env.errors).to.deep.equal([]);
 
-    await waitUntil(() => calls === 2, 600);
-
-    await worker.close();
+    await waitUntil(() => calls === 2, 700);
   });
 
   it("does not emit errors if everything is fine", async () => {
-    const worker = env.owl.createWorker(async (job, ack) => {
+    worker = env.owl.createWorker(async (job, ack) => {
       setTimeout(() => {
         worker.acknowledger.acknowledge(ack);
       }, 500);
@@ -97,7 +99,5 @@ describeAcrossBackends("stale-check", (backend) => {
 
     await env.producer.staleChecker.check();
     expect(env.errors).to.deep.equal([]);
-
-    await worker.close();
   });
 });

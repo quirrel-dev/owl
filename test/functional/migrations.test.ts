@@ -6,13 +6,17 @@ import {
 } from "../../src/shared/migrator/migrator";
 
 describe("Migrations", () => {
-  const redis = new Redis(process.env.REDIS_URL);
+  let redis: Redis.Redis;
 
   beforeEach(async () => {
     await redis.flushall();
   });
 
-  after(() => {
+  before(() => {
+    redis = new Redis(process.env.REDIS_URL);
+  });
+
+  after(async () => {
     redis.disconnect();
   });
 

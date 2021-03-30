@@ -61,7 +61,7 @@ export function makeProducerEnv(
   }
 
   async function teardown() {
-    await env.redis?.quit();
+    env.redis.disconnect();
     await env.producer.close();
   }
 
@@ -133,7 +133,7 @@ export function makeWorkerEnv(
     );
 
     // worker needs time to scan for tenants
-    await delay(10)
+    await delay(10);
   };
 
   workerEnv.teardown = async function teardown() {

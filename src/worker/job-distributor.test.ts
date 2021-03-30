@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import EventEmitter from "events";
+import { Closable } from "../Closable";
 import { JobDistributor } from "./job-distributor";
 
 export function makeBlocker() {
@@ -26,6 +27,12 @@ function tick() {
 }
 
 describe(JobDistributor.name, () => {
+  let closables: Closable[] = [];
+  afterEach(async () => {
+    await Promise.all(closables.map((c) => c.close()));
+    closables = [];
+  });
+
   it("fetches all available jobs", async () => {
     const availableJobs = ["a", "b", "c"];
     const workedJobs: string[] = [];
@@ -45,6 +52,8 @@ describe(JobDistributor.name, () => {
         workedJobs.push(job);
       }
     );
+
+    closables.push(distributor);
 
     await distributor.start();
 
@@ -79,6 +88,8 @@ describe(JobDistributor.name, () => {
       },
       3
     );
+
+    closables.push(distributor);
 
     distributor.start();
 
@@ -125,6 +136,8 @@ describe(JobDistributor.name, () => {
         log.push("work:" + job);
       }
     );
+
+    closables.push(distributor);
 
     distributor.start();
     await tick();
@@ -194,9 +207,7 @@ describe(JobDistributor.name, () => {
       }
     );
 
-    distributor.setTimeout = (cb) => {
-      return null as any;
-    };
+    closables.push(distributor);
 
     await distributor.start();
 
@@ -216,9 +227,7 @@ describe(JobDistributor.name, () => {
           async (job) => {}
         );
 
-        distributor.setTimeout = (cb) => {
-          return null as any;
-        };
+        closables.push(distributor);
 
         try {
           await distributor.start();
@@ -261,9 +270,7 @@ describe(JobDistributor.name, () => {
           }
         );
 
-        distributor.setTimeout = (cb) => {
-          return null as any;
-        };
+        closables.push(distributor);
 
         await distributor.start();
 
@@ -306,6 +313,8 @@ describe(JobDistributor.name, () => {
         log.push("work:" + tenant + ":" + job);
       }
     );
+
+    closables.push(distributor);
 
     await distributor.start();
 

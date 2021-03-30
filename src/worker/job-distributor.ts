@@ -3,6 +3,8 @@ import { Closable } from "../Closable";
 export class JobDistributor<T> implements Closable {
   private readonly jobs = new Set<T>();
 
+  private isClosed = false;
+
   get load() {
     return this.jobs.size;
   }
@@ -53,7 +55,11 @@ export class JobDistributor<T> implements Closable {
 
   private delayAutoCheck(tenant: string) {
     if (this.autoCheckIds[tenant]) {
-      clearInterval(this.autoCheckIds[tenant]);
+      clearTimeout(this.autoCheckIds[tenant]);
+    }
+
+    if (this.isClosed) {
+      return;
     }
 
     this.autoCheckIds[tenant] = this.setTimeout(
@@ -64,6 +70,8 @@ export class JobDistributor<T> implements Closable {
 
   public async checkForNewJobs(tenant: string) {
     this.delayAutoCheck(tenant);
+
+    // console.log({ tenant, isClosed: this.isClosed })
 
     while (!this.isPacked) {
       const result = await this.fetch(tenant);
@@ -92,6 +100,9 @@ export class JobDistributor<T> implements Closable {
   }
 
   close() {
-    Object.values(this.autoCheckIds).forEach(clearInterval);
+    this.isClosed = true;
+    for (const autoCheckId of Object.values(this.autoCheckIds)) {
+      clearTimeout(autoCheckId);
+    }
   }
 }
