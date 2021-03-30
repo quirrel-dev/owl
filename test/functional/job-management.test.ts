@@ -70,6 +70,12 @@ describeAcrossBackends("Job Management", (backend) => {
       ]);
 
       expect(newCursor).to.eq(0);
+
+      const { jobs: patternJobs } = await env.producer.scanQueuePattern(
+        "",
+        "producer;*;*"
+      );
+      expect(patternJobs).to.have.length(jobs.length);
     });
   });
 
