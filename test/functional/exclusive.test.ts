@@ -27,7 +27,7 @@ describeAcrossBackends("Exclusive", (backend) => {
   async function waitUntilEvent(
     type: OnActivityEvent["type"],
     id: string,
-    maxWait: number = 50
+    maxWait: number = 100
   ) {
     await waitUntil(() => eventIndex(type, id) !== -1, maxWait);
   }
@@ -61,7 +61,7 @@ describeAcrossBackends("Exclusive", (backend) => {
   });
 
   async function expectToBeExecutedInSerial() {
-    await waitUntilEvent("acknowledged", "b", 100);
+    await waitUntilEvent("acknowledged", "b");
 
     expectInOrder([
       eventIndex("requested", "a"),
