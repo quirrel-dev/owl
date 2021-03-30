@@ -71,8 +71,6 @@ export class JobDistributor<T> implements Closable {
   public async checkForNewJobs(tenant: string) {
     this.delayAutoCheck(tenant);
 
-    // console.log({ tenant, isClosed: this.isClosed })
-
     while (!this.isPacked) {
       const result = await this.fetch(tenant);
       switch (result[0]) {

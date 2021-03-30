@@ -1,9 +1,10 @@
 import type { Redis } from "ioredis";
 import { Closable } from "../Closable";
+import { tenantToRedisPrefix } from "../encodeRedisKey";
 import type { Producer } from "../producer/producer";
 import { computeTimestampForNextRetry } from "../worker/retry";
 import type { Acknowledger } from "./acknowledger";
-import { scanTenants } from "./scan-tenants";
+import { scanTenantsForProcessing } from "./scan-tenants";
 
 const oneMinute = 60 * 1000;
 
@@ -73,19 +74,19 @@ export class StaleChecker implements Closable {
   }
 
   public async check() {
-    const staleJobDescriptors = await this.zremrangebyscoreandreturn(
-      "processing",
-      "-inf",
-      this.getMaxDate()
-    );
-
-    if (staleJobDescriptors.length === 0) {
-      return;
-    }
-
-    for await (const tenants of scanTenants(this.redis)) {
+    for await (const tenants of scanTenantsForProcessing(this.redis)) {
       await Promise.all(
         tenants.map(async (tenant) => {
+          const staleJobDescriptors = await this.zremrangebyscoreandreturn(
+            tenantToRedisPrefix(tenant) + "processing",
+            "-inf",
+            this.getMaxDate()
+          );
+
+          if (staleJobDescriptors.length === 0) {
+            return;
+          }
+
           const staleJobs = await this.producer.findJobs(
             tenant,
             staleJobDescriptors.map(this.parseJobDescriptor)
