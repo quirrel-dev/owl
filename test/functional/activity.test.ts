@@ -149,7 +149,7 @@ describeAcrossBackends("Activity", (backend) => {
           tenant: "",
         },
       ],
-      100
+      150
     );
   });
 });
