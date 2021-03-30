@@ -38,7 +38,7 @@ describeAcrossBackends("Latency", (backend) => {
 
       await waitUntil(
         () => env.jobs.length === 1000,
-        backend === "Redis" ? 500 : 6000
+        backend === "Redis" ? 500 : 7000
       );
 
       expect(env.jobs).to.be.length(1000);
