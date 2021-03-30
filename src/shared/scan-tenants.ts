@@ -3,9 +3,7 @@ import type { Redis } from "ioredis";
 export async function* scanTenants(redis: Redis) {
   let cursor = 0;
 
-  if (await redis.exists("queue")) {
-    yield [""];
-  }
+  yield [""];
 
   do {
     const [newCursor, queueKeys] = await redis.scan(

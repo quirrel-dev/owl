@@ -1,19 +1,26 @@
 import { expect } from "chai";
-import { describeAcrossBackends, makeSignal } from "../util";
+import { Worker } from "../../src/worker/worker";
+import { delay, describeAcrossBackends, makeSignal } from "../util";
 import { makeProducerEnv } from "./support";
 
 describeAcrossBackends("dontReschedule", (backend) => {
-  it("works", async () => {
-    const producerEnv = makeProducerEnv(backend);
-    await producerEnv.setup();
+  const producerEnv = makeProducerEnv(backend);
+  before(producerEnv.setup);
+  after(async () => {
+    await producerEnv.teardown();
+    await worker.close();
+  });
+  let worker: Worker;
 
+  it("works", async () => {
     const acknowledged = makeSignal();
-    const worker = producerEnv.owl.createWorker(async (job, meta) => {
+    worker = producerEnv.owl.createWorker(async (job, meta) => {
       await worker.acknowledger.acknowledge(meta, {
         dontReschedule: true,
       });
       acknowledged.signal();
     });
+    await delay(10);
 
     await producerEnv.producer.enqueue({
       tenant: "",
@@ -30,8 +37,5 @@ describeAcrossBackends("dontReschedule", (backend) => {
 
     const job = await producerEnv.producer.findById("", "q", "a");
     expect(job).to.be.null;
-
-    await producerEnv.teardown();
-    await worker.close();
   });
 });
