@@ -134,7 +134,8 @@ describeAcrossBackends("Job Management", (backend) => {
       const job = await env.producer.findById("", "producer-invoke", "a");
       expect(+job.runAt).to.equal(+new Date("1970-10-27T07:36:56.321Z"));
 
-      await env.producer.invoke("", "producer-invoke", "a");
+      const result = await env.producer.invoke("", "producer-invoke", "a");
+      expect(result).to.equal("invoked");
 
       const invokedJob = await env.producer.findById(
         "",
@@ -142,6 +143,15 @@ describeAcrossBackends("Job Management", (backend) => {
         "a"
       );
       expect(+invokedJob.runAt).to.be.closeTo(Date.now(), 20);
+    });
+
+    it("returns null if not found", async () => {
+      const result = await env.producer.invoke(
+        "",
+        "producer-invoke",
+        "non-existant"
+      );
+      expect(result).to.eq("not_found");
     });
   });
 
