@@ -1,21 +1,17 @@
 import { Redis } from "ioredis";
 import { Closable } from "../Closable";
 import { Job, JobEnqueue } from "../Job";
-import * as fs from "fs";
-import * as path from "path";
 import createDebug from "debug";
 import { Acknowledger, OnError } from "../shared/acknowledger";
 import { StaleChecker, StaleCheckerConfig } from "../shared/stale-checker";
 import { decodeRedisKey, encodeRedisKey } from "../encodeRedisKey";
+import { defineLocalCommands } from "../redis-commands";
 
 const debug = createDebug("owl:producer");
 
 declare module "ioredis" {
   interface Commands {
     schedule(
-      jobTableJobId: string,
-      jobTableIndexByQueue: string,
-      queueKey: string,
       id: string,
       queue: string,
       payload: string,
@@ -28,21 +24,9 @@ declare module "ioredis" {
       retryIntervals: string
     ): Promise<0 | 1>;
 
-    delete(
-      jobTableJobId: string,
-      jobTableIndexByQueue: string,
-      queueKey: string,
-      id: string,
-      queue: string
-    ): Promise<0 | 1>;
+    delete(id: string, queue: string): Promise<0 | 1>;
 
-    invoke(
-      jobTableJobId: string,
-      queueKey: string,
-      id: string,
-      queue: string,
-      newRunAt: number
-    ): Promise<0 | 1>;
+    invoke(id: string, queue: string, newRunAt: number): Promise<0 | 1>;
   }
 }
 
@@ -59,20 +43,7 @@ export class Producer<ScheduleType extends string> implements Closable {
   ) {
     this.redis = redisFactory();
 
-    this.redis.defineCommand("schedule", {
-      lua: fs.readFileSync(path.join(__dirname, "schedule.lua")).toString(),
-      numberOfKeys: 3,
-    });
-
-    this.redis.defineCommand("invoke", {
-      lua: fs.readFileSync(path.join(__dirname, "invoke.lua")).toString(),
-      numberOfKeys: 2,
-    });
-
-    this.redis.defineCommand("delete", {
-      lua: fs.readFileSync(path.join(__dirname, "delete.lua")).toString(),
-      numberOfKeys: 3,
-    });
+    defineLocalCommands(this.redis, __dirname);
 
     this.acknowledger = new Acknowledger(this.redis, onError);
     this.staleChecker = new StaleChecker(
@@ -99,9 +70,6 @@ export class Producer<ScheduleType extends string> implements Closable {
     }
 
     await this.redis.schedule(
-      `jobs:${encodeRedisKey(job.queue)}:${encodeRedisKey(job.id)}`,
-      `queues:${encodeRedisKey(job.queue)}`,
-      "queue",
       encodeRedisKey(job.id),
       encodeRedisKey(job.queue),
       job.payload,
@@ -181,9 +149,7 @@ export class Producer<ScheduleType extends string> implements Closable {
     const pipeline = this.redis.pipeline();
 
     for (const { queue, id } of ids) {
-      pipeline.hgetall(
-        `jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`
-      );
+      pipeline.hgetall(`jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`);
       pipeline.zscore(
         "queue",
         `${encodeRedisKey(queue)}:${encodeRedisKey(id)}`
@@ -256,9 +222,6 @@ export class Producer<ScheduleType extends string> implements Closable {
 
   public async delete(queue: string, id: string) {
     const result = await this.redis.delete(
-      `jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`,
-      `queues:${encodeRedisKey(queue)}`,
-      "queue",
       encodeRedisKey(id),
       encodeRedisKey(queue)
     );
@@ -273,8 +236,6 @@ export class Producer<ScheduleType extends string> implements Closable {
 
   public async invoke(queue: string, id: string) {
     const result = await this.redis.invoke(
-      `jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`,
-      "queue",
       encodeRedisKey(id),
       encodeRedisKey(queue),
       Date.now()

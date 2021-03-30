@@ -1,29 +1,19 @@
---[[
-  Checks if a specified job exists and deletes it
+-- Checks if a specified job exists and deletes it.
 
-  Input:
-    KEYS[1] job table + queue + id
-    KEYS[2] job table index: by queue
-    KEYS[3] queue
+local jobId = ARGV[1]
+local jobQueue = ARGV[2]
 
-    ARGV[1] id
-    ARGV[2] queue
+local FOUND_AND_DELETED = 0
+local NOT_FOUND = 1
 
-  Output:
-    0 found and deleted
-    1 not found
-]]
-
-if redis.call("DEL", KEYS[1]) == 0 then
-  return 1
+if redis.call("DEL", "jobs:" .. jobQueue .. ":" .. jobId) == 0 then
+  return NOT_FOUND
 end
 
-redis.call("SREM", KEYS[2], ARGV[1])
-redis.call("ZREM", KEYS[3], ARGV[2] .. ":" .. ARGV[1])
+redis.call("SREM", "queues:" .. jobQueue, jobId)
+redis.call("ZREM", "queue", jobQueue .. ":" .. jobId)
 
--- publishes "deleted" to "<queue>:<id>"
-redis.call("PUBLISH", ARGV[2] .. ":" .. ARGV[1], "deleted")
--- publishes "<queue>:<id>" to "deleted"
-redis.call("PUBLISH", "deleted", ARGV[2] .. ":" .. ARGV[1])
+redis.call("PUBLISH", jobQueue .. ":" .. jobId, "deleted")
+redis.call("PUBLISH", "deleted", jobQueue .. ":" .. jobId)
 
-return 0
+return FOUND_AND_DELETED

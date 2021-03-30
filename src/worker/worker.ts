@@ -1,12 +1,7 @@
-import { EventEmitter } from "events";
 import { Redis } from "ioredis";
 import { Closable } from "../Closable";
 import { Job } from "../Job";
-import * as fs from "fs";
-import * as path from "path";
 import type { ScheduleMap } from "../index";
-import createDebug from "debug";
-import { EggTimer } from "./egg-timer";
 import { computeTimestampForNextRetry } from "./retry";
 import {
   AcknowledgementDescriptor,
@@ -14,19 +9,13 @@ import {
   OnError,
 } from "../shared/acknowledger";
 import { decodeRedisKey } from "../encodeRedisKey";
-
-const debug = createDebug("owl:worker");
+import { JobDistributor } from "./job-distributor";
+import { defineLocalCommands } from "../redis-commands";
 
 declare module "ioredis" {
   interface Commands {
     request(
-      queueKey: string,
-      processingKey: string,
-      blockedQueuesKey: string,
-      softBlockCounterKey: string,
-      jobTablePrefix: string,
-      currentTimestamp: number,
-      blockedQueuesPrefix: string
+      currentTimestamp: number
     ): Promise<
       | [
           queue: string,
@@ -53,17 +42,8 @@ export type Processor = (
 ) => Promise<void>;
 
 export class Worker implements Closable {
-  private readonly currentlyProcessingJobs: Set<Promise<void>> = new Set();
-  private readonly events = new EventEmitter();
-  private closing = false;
-
   private readonly redis;
   private readonly redisSub;
-
-  private readonly eggTimer = new EggTimer(() =>
-    this.events.emit("next", "timer")
-  );
-  private queueIsKnownToBeEmpty = false;
 
   public readonly acknowledger: Acknowledger;
 
@@ -79,29 +59,19 @@ export class Worker implements Closable {
 
     this.acknowledger = new Acknowledger(this.redis, onError);
 
-    this.redis.defineCommand("request", {
-      lua: fs.readFileSync(path.join(__dirname, "request.lua")).toString(),
-      numberOfKeys: 4,
-    });
+    defineLocalCommands(this.redis, __dirname);
 
-    this.events.on("next", (d) => this.requestNextJobs(d));
-
-    this.redisSub.on("message", (msg) => {
+    this.redisSub.on("message", () => {
       setImmediate(() => {
-        this.queueIsKnownToBeEmpty = false;
-        this.events.emit("next", "sub:" + msg);
+        this.distributor.checkForNewJobs();
       });
     });
 
     this.redisSub
       .subscribe("scheduled", "invoked", "rescheduled", "unblocked")
       .then(() => {
-        this.events.emit("next", "init");
+        this.distributor.checkForNewJobs();
       });
-  }
-
-  private isMaxedOut() {
-    return this.currentlyProcessingJobs.size >= this.maximumConcurrency;
   }
 
   private getNextExecutionDate(
@@ -126,47 +96,36 @@ export class Worker implements Closable {
     return +result;
   }
 
-  private async requestNextJobs(origin: string = "") {
-    debug("requestNextJobs() called", origin);
-    if (this.isMaxedOut()) {
-      debug("requestNextJobs(): skipped (worker is maxed out)");
-      return;
-    }
-    if (this.closing) {
-      debug("requestNextJobs(): skipped (worker is closing)");
-      return;
-    }
+  private readonly distributor = new JobDistributor(
+    async () => {
+      const result = await this.redis.request(Date.now());
 
-    const result = await this.redis.request(
-      "queue",
-      "processing",
-      "blocked-queues",
-      "soft-block",
-      "jobs",
-      Date.now(),
-      "blocked"
-    );
+      if (!result) {
+        return ["empty"];
+      }
 
-    if (!result) {
-      debug("requestNextJobs(): skipped (queue is empty)");
-      this.queueIsKnownToBeEmpty = true;
-      this.eggTimer.reset();
-      return;
-    }
+      if (result === -1) {
+        return ["retry"];
+      }
 
-    if (result === -1) {
-      debug("requestNextJobs(): job's blocked", result);
-      this.queueIsKnownToBeEmpty = true;
-      return;
-    }
+      if (typeof result === "number") {
+        const timerMaxLimit = 2147483647;
+        const timeout = result - Date.now();
+        if (timeout > timerMaxLimit) {
+          return ["empty"];
+        } else {
+          return [
+            "wait",
+            new Promise((resolve) => {
+              setTimeout(resolve, timeout);
+            }),
+          ];
+        }
+      }
 
-    if (typeof result === "number") {
-      debug("requestNextJobs(): skipped (next job due at %o)", result);
-      this.eggTimer.setTimer(result);
-      return;
-    }
-
-    const currentlyProcessing = (async () => {
+      return ["success", result];
+    },
+    async (result) => {
       const [
         _queue,
         _id,
@@ -223,31 +182,16 @@ export class Worker implements Closable {
       };
 
       try {
-        debug(`requestNextJobs(): job #${id} - started working`);
-
         await this.processor(job, ackDescriptor);
       } catch (error) {
-        debug(`requestNextJobs(): job #${id} - found error`);
         await this.acknowledger.reportFailure(ackDescriptor, error);
       }
-    })();
-
-    this.currentlyProcessingJobs.add(currentlyProcessing);
-    if (!this.queueIsKnownToBeEmpty) {
-      this.events.emit("next", "feed");
-    }
-
-    await currentlyProcessing;
-    this.currentlyProcessingJobs.delete(currentlyProcessing);
-
-    if (!this.queueIsKnownToBeEmpty) {
-      this.events.emit("next", "thank u, next");
-    }
-  }
+    },
+    this.maximumConcurrency
+  );
 
   public async close() {
-    this.closing = true;
-    await Promise.all(this.currentlyProcessingJobs);
+    await this.distributor.close();
     await this.redis.quit();
     await this.redisSub.quit();
   }

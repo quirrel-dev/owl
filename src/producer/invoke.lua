@@ -1,28 +1,19 @@
---[[
-  Checks if a specified job exists and invokes it immediately
+-- Checks if a specified job exists and invokes it immediately.
 
-  Input:
-    KEYS[1] job table + queue + id
-    KEYS[2] queue
+local jobId = ARGV[1]
+local jobQueue = ARGV[2]
+local newRunAt = ARGV[3]
 
-    ARGV[1] id
-    ARGV[2] queue
-    ARGV[3] new score / runAt
+local FOUND_AND_INVOKED = 0
+local NOT_FOUND = 1
 
-  Output:
-    0 found and invoked
-    1 not found
-]]
-
-if redis.call("EXISTS", KEYS[1]) == 0 then
-  return 1
+if redis.call("EXISTS", "jobs:" .. jobQueue .. ":" .. jobId) == 0 then
+  return NOT_FOUND
 end
 
-redis.call("ZADD", KEYS[2], ARGV[3], ARGV[2] .. ":" .. ARGV[1])
+redis.call("ZADD", "queue", newRunAt, jobQueue .. ":" .. jobId)
 
--- publishes "invoked" to "<queue>:<id>"
-redis.call("PUBLISH", ARGV[2] .. ":" .. ARGV[1], "invoked")
--- publishes "<queue>:<id>" to "invoked"
-redis.call("PUBLISH", "invoked", ARGV[2] .. ":" .. ARGV[1])
+redis.call("PUBLISH", jobQueue .. ":" .. jobId, "invoked")
+redis.call("PUBLISH", "invoked", jobQueue .. ":" .. jobId)
 
-return 0
+return FOUND_AND_INVOKED

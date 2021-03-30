@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { computeTimestampForNextRetry } from "../../src/worker/retry";
+import { computeTimestampForNextRetry } from "./retry";
 
 it("computeTimestampForNextRetry", () => {
   const schedule = [10, 100, 1000];
