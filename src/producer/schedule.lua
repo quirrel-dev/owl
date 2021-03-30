@@ -1,5 +1,7 @@
 -- Adds the job's data to the job table and schedules it.
 
+local tenantPrefix = KEYS[1]
+
 local jobId = ARGV[1]
 local jobQueue = ARGV[2]
 local payload = ARGV[3]
@@ -14,7 +16,7 @@ local retryIntervals = ARGV[10] -- as JSON array
 local SCHEDULED = 0
 local ID_ALREADY_EXISTS = 1
 
-local jobTableJobKey = "jobs:" .. jobQueue .. ":" .. jobId
+local jobTableJobKey = tenantPrefix .. "jobs:" .. jobQueue .. ":" .. jobId
 
 if not override then  
   if redis.call("EXISTS", jobTableJobKey) == 1 then
@@ -35,11 +37,11 @@ redis.call(
     "retry", retryIntervals
 )
 
-redis.call("SADD", "queues:" .. jobQueue, jobId)
+redis.call("SADD", tenantPrefix .. "queues:" .. jobQueue, jobId)
 
-redis.call("ZADD", "queue", scheduledExecutionDate, jobQueue .. ":" .. jobId)
+redis.call("ZADD", tenantPrefix .. "queue", scheduledExecutionDate, jobQueue .. ":" .. jobId)
 
-redis.call("PUBLISH", jobQueue .. ":" .. jobId, "scheduled" .. ":" .. scheduledExecutionDate .. ":" .. scheduleType .. ":" .. scheduleMeta .. ":" .. maximumExecutionTimes .. ":" .. exclusive .. ":" .. count .. ":" .. retryIntervals .. ":" .. payload)
-redis.call("PUBLISH", "scheduled", jobQueue .. ":" .. jobId)
+redis.call("PUBLISH", tenantPrefix .. jobQueue .. ":" .. jobId, "scheduled" .. ":" .. scheduledExecutionDate .. ":" .. scheduleType .. ":" .. scheduleMeta .. ":" .. maximumExecutionTimes .. ":" .. exclusive .. ":" .. count .. ":" .. retryIntervals .. ":" .. payload)
+redis.call("PUBLISH", tenantPrefix .. "scheduled", jobQueue .. ":" .. jobId)
 
 return SCHEDULED

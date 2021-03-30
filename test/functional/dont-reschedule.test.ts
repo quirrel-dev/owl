@@ -16,6 +16,7 @@ describeAcrossBackends("dontReschedule", (backend) => {
     });
 
     await producerEnv.producer.enqueue({
+      tenant: "",
       id: "a",
       queue: "q",
       payload: "p",
@@ -27,7 +28,7 @@ describeAcrossBackends("dontReschedule", (backend) => {
 
     await acknowledged;
 
-    const job = await producerEnv.producer.findById("q", "a");
+    const job = await producerEnv.producer.findById("", "q", "a");
     expect(job).to.be.null;
 
     await producerEnv.teardown();

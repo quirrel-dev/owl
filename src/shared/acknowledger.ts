@@ -1,12 +1,13 @@
 import createDebug from "debug";
 import { Pipeline, Redis } from "ioredis";
-import { encodeRedisKey } from "../encodeRedisKey";
+import { encodeRedisKey, tenantToRedisPrefix } from "../encodeRedisKey";
 import { defineLocalCommands } from "../redis-commands";
 
 const debug = createDebug("owl:acknowledger");
 
 declare module "ioredis" {
   type AcknowledgeArgs = [
+    tenantPrefix: string,
     id: string,
     queue: string,
     timestampToRescheduleFor: number | undefined
@@ -21,6 +22,7 @@ declare module "ioredis" {
 }
 
 export interface AcknowledgementDescriptor {
+  tenant: string;
   queueId: string;
   jobId: string;
   timestampForNextRetry?: number;
@@ -51,12 +53,17 @@ export class Acknowledger {
     const _queueId = encodeRedisKey(queueId);
     const _jobId = encodeRedisKey(jobId);
 
-    pipeline.publish(event, `${_queueId}:${_jobId}:${errorString}`);
-    pipeline.publish(_queueId, `${event}:${_jobId}:${errorString}`);
-    pipeline.publish(`${_queueId}:${_jobId}`, `${event}:${errorString}`);
-    pipeline.publish(`${_queueId}:${_jobId}:${event}`, errorString);
+    const prefix = tenantToRedisPrefix(descriptor.tenant);
 
-    pipeline.acknowledge(_jobId, _queueId, timestampForNextRetry);
+    pipeline.publish(prefix + event, `${_queueId}:${_jobId}:${errorString}`);
+    pipeline.publish(prefix + _queueId, `${event}:${_jobId}:${errorString}`);
+    pipeline.publish(
+      prefix + `${_queueId}:${_jobId}`,
+      `${event}:${errorString}`
+    );
+    pipeline.publish(prefix + `${_queueId}:${_jobId}:${event}`, errorString);
+
+    pipeline.acknowledge(prefix, _jobId, _queueId, timestampForNextRetry);
 
     if (!isRetryable) {
       this.onError?.(descriptor, error);
@@ -76,9 +83,10 @@ export class Acknowledger {
     descriptor: AcknowledgementDescriptor,
     options: { dontReschedule?: boolean } = {}
   ) {
-    const { queueId, jobId, nextExecutionDate } = descriptor;
+    const { queueId, jobId, nextExecutionDate, tenant } = descriptor;
 
     await this.redis.acknowledge(
+      tenantToRedisPrefix(tenant),
       encodeRedisKey(jobId),
       encodeRedisKey(queueId),
       options.dontReschedule ? undefined : nextExecutionDate

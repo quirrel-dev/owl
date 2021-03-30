@@ -4,7 +4,11 @@ import { Job, JobEnqueue } from "../Job";
 import createDebug from "debug";
 import { Acknowledger, OnError } from "../shared/acknowledger";
 import { StaleChecker, StaleCheckerConfig } from "../shared/stale-checker";
-import { decodeRedisKey, encodeRedisKey } from "../encodeRedisKey";
+import {
+  decodeRedisKey,
+  encodeRedisKey,
+  tenantToRedisPrefix,
+} from "../encodeRedisKey";
 import { defineLocalCommands } from "../redis-commands";
 
 const debug = createDebug("owl:producer");
@@ -12,6 +16,7 @@ const debug = createDebug("owl:producer");
 declare module "ioredis" {
   interface Commands {
     schedule(
+      tenantPrefix: string,
       id: string,
       queue: string,
       payload: string,
@@ -24,9 +29,14 @@ declare module "ioredis" {
       retryIntervals: string
     ): Promise<0 | 1>;
 
-    delete(id: string, queue: string): Promise<0 | 1>;
+    delete(tenantPrefix: string, id: string, queue: string): Promise<0 | 1>;
 
-    invoke(id: string, queue: string, newRunAt: number): Promise<0 | 1>;
+    invoke(
+      tenantPrefix: string,
+      id: string,
+      queue: string,
+      newRunAt: number
+    ): Promise<0 | 1>;
   }
 }
 
@@ -70,6 +80,7 @@ export class Producer<ScheduleType extends string> implements Closable {
     }
 
     await this.redis.schedule(
+      tenantToRedisPrefix(job.tenant),
       encodeRedisKey(job.id),
       encodeRedisKey(job.queue),
       job.payload,
@@ -84,6 +95,7 @@ export class Producer<ScheduleType extends string> implements Closable {
     debug("job #%o: enqueued", job.id);
 
     return {
+      tenant: job.tenant,
       id: job.id,
       queue: job.queue,
       count: 1,
@@ -96,12 +108,13 @@ export class Producer<ScheduleType extends string> implements Closable {
   }
 
   public async scanQueue(
+    tenant: string,
     queue: string,
     cursor: number = 0,
     count = 100
   ): Promise<{ newCursor: number; jobs: Job<ScheduleType>[] }> {
     const [newCursor, jobIds] = await this.redis.sscan(
-      `queues:${encodeRedisKey(queue)}`,
+      tenantToRedisPrefix(tenant) + `queues:${encodeRedisKey(queue)}`,
       cursor,
       "COUNT",
       count
@@ -111,6 +124,7 @@ export class Producer<ScheduleType extends string> implements Closable {
       newCursor: +newCursor,
       jobs: (
         await this.findJobs(
+          tenant,
           jobIds.map(decodeRedisKey).map((id) => ({ id, queue }))
         )
       ).filter((j) => !!j) as Job<ScheduleType>[],
@@ -118,6 +132,7 @@ export class Producer<ScheduleType extends string> implements Closable {
   }
 
   public async scanQueuePattern(
+    tenant: string,
     queuePattern: string,
     cursor: number = 0,
     count = 100
@@ -125,7 +140,7 @@ export class Producer<ScheduleType extends string> implements Closable {
     const [newCursor, jobIdKeys] = await this.redis.scan(
       cursor,
       "MATCH",
-      `jobs:${encodeRedisKey(queuePattern)}:*`,
+      tenantToRedisPrefix(tenant) + `jobs:${encodeRedisKey(queuePattern)}:*`,
       "COUNT",
       count
     );
@@ -137,21 +152,26 @@ export class Producer<ScheduleType extends string> implements Closable {
 
     return {
       newCursor: +newCursor,
-      jobs: (await this.findJobs(jobIds)).filter(
+      jobs: (await this.findJobs(tenant, jobIds)).filter(
         (j) => !!j
       ) as Job<ScheduleType>[],
     };
   }
 
   public async findJobs(
+    tenant: string,
     ids: { queue: string; id: string }[]
   ): Promise<(Job<ScheduleType> | null)[]> {
     const pipeline = this.redis.pipeline();
 
     for (const { queue, id } of ids) {
-      pipeline.hgetall(`jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`);
+      pipeline.hgetall(
+        `${tenantToRedisPrefix(tenant)}jobs:${encodeRedisKey(
+          queue
+        )}:${encodeRedisKey(id)}`
+      );
       pipeline.zscore(
-        "queue",
+        tenantToRedisPrefix(tenant) + "queue",
         `${encodeRedisKey(queue)}:${encodeRedisKey(id)}`
       );
     }
@@ -192,6 +212,7 @@ export class Producer<ScheduleType extends string> implements Closable {
       const runAt = +zscoreResult;
 
       jobResults.push({
+        tenant,
         id,
         queue,
         payload,
@@ -213,15 +234,17 @@ export class Producer<ScheduleType extends string> implements Closable {
   }
 
   public async findById(
+    tenant: string,
     queue: string,
     id: string
   ): Promise<Job<ScheduleType> | null> {
-    const [job] = await this.findJobs([{ id, queue }]);
+    const [job] = await this.findJobs(tenant, [{ id, queue }]);
     return job;
   }
 
-  public async delete(queue: string, id: string) {
+  public async delete(tenant: string, queue: string, id: string) {
     const result = await this.redis.delete(
+      tenantToRedisPrefix(tenant),
       encodeRedisKey(id),
       encodeRedisKey(queue)
     );
@@ -234,8 +257,9 @@ export class Producer<ScheduleType extends string> implements Closable {
     }
   }
 
-  public async invoke(queue: string, id: string) {
+  public async invoke(tenant: string, queue: string, id: string) {
     const result = await this.redis.invoke(
+      tenantToRedisPrefix(tenant),
       encodeRedisKey(id),
       encodeRedisKey(queue),
       Date.now()

@@ -14,6 +14,7 @@ describeAcrossBackends("Schedule", (backend) => {
         const start = Date.now();
 
         await env.producer.enqueue({
+          tenant: "",
           queue: "scheduled-eternity",
           id: "a",
           payload: "a",
@@ -39,7 +40,7 @@ describeAcrossBackends("Schedule", (backend) => {
 
         const lengthBeforeDeletion = env.jobs.length;
 
-        await env.producer.delete("scheduled-eternity", "a");
+        await env.producer.delete("", "scheduled-eternity", "a");
 
         await delay(100);
 
@@ -52,6 +53,7 @@ describeAcrossBackends("Schedule", (backend) => {
     describe("with 'times' limit", () => {
       it("executes specified amount of times", async () => {
         await env.producer.enqueue({
+          tenant: "",
           queue: "scheduled-times",
           id: "a",
           payload: "a",

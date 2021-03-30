@@ -131,6 +131,9 @@ export function makeWorkerEnv(
         onFinishedListeners.forEach((listener) => listener(job));
       }
     );
+
+    // worker needs time to scan for tenants
+    await delay(10)
   };
 
   workerEnv.teardown = async function teardown() {
@@ -160,7 +163,7 @@ export function makeActivityEnv(backend: Backend, fail?: WorkerFailPredicate) {
 
     activityEnv.events = [];
 
-    activityEnv.activity = workerEnv.owl.createActivity((event) => {
+    activityEnv.activity = workerEnv.owl.createActivity("", (event) => {
       activityEnv.events.push(event);
     });
 

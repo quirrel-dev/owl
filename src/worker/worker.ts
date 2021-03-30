@@ -8,13 +8,16 @@ import {
   Acknowledger,
   OnError,
 } from "../shared/acknowledger";
-import { decodeRedisKey } from "../encodeRedisKey";
+import { decodeRedisKey, tenantToRedisPrefix } from "../encodeRedisKey";
 import { JobDistributor } from "./job-distributor";
 import { defineLocalCommands } from "../redis-commands";
+import RedisMock from "ioredis-mock";
+import { scanTenants } from "../shared/scan-tenants";
 
 declare module "ioredis" {
   interface Commands {
     request(
+      tenantPrefix: string,
       currentTimestamp: number
     ): Promise<
       | [
@@ -41,6 +44,14 @@ export type Processor = (
   ackDescriptor: AcknowledgementDescriptor
 ) => Promise<void>;
 
+function parseTenantFromChannel(topic: string) {
+  if (topic.startsWith("{")) {
+    return topic.slice(1, topic.indexOf("}"));
+  }
+
+  return "";
+}
+
 export class Worker implements Closable {
   private readonly redis;
   private readonly redisSub;
@@ -61,17 +72,34 @@ export class Worker implements Closable {
 
     defineLocalCommands(this.redis, __dirname);
 
-    this.redisSub.on("message", () => {
-      setImmediate(() => {
-        this.distributor.checkForNewJobs();
-      });
-    });
+    this.listenForPubs();
 
-    this.redisSub
-      .subscribe("scheduled", "invoked", "rescheduled", "unblocked")
-      .then(() => {
-        this.distributor.checkForNewJobs();
+    this.distributor.start();
+  }
+
+  private listenForPubs() {
+    const handleMessage = (channel: string) => {
+      setImmediate(() => {
+        this.distributor.checkForNewJobs(parseTenantFromChannel(channel));
       });
+    };
+
+    if (this.redisSub instanceof RedisMock) {
+      this.redisSub.on("message", (channel) => {
+        handleMessage(channel);
+      });
+    } else {
+      this.redisSub.on("pmessage", (_pattern, channel) => {
+        handleMessage(channel);
+      });
+    }
+
+    this.redisSub.psubscribe(
+      "*scheduled",
+      "*invoked",
+      "*rescheduled",
+      "*unblocked"
+    );
   }
 
   private getNextExecutionDate(
@@ -97,8 +125,12 @@ export class Worker implements Closable {
   }
 
   private readonly distributor = new JobDistributor(
-    async () => {
-      const result = await this.redis.request(Date.now());
+    () => scanTenants(this.redis),
+    async (tenant) => {
+      const result = await this.redis.request(
+        tenantToRedisPrefix(tenant),
+        Date.now()
+      );
 
       if (!result) {
         return ["empty"];
@@ -125,7 +157,7 @@ export class Worker implements Closable {
 
       return ["success", result];
     },
-    async (result) => {
+    async (result, tenant) => {
       const [
         _queue,
         _id,
@@ -144,6 +176,7 @@ export class Worker implements Closable {
       const retry = JSON.parse(retryJSON ?? "[]") as number[];
 
       const job: Job = {
+        tenant,
         queue,
         id,
         payload,
@@ -171,6 +204,7 @@ export class Worker implements Closable {
       }
 
       const ackDescriptor: AcknowledgementDescriptor = {
+        tenant,
         jobId: job.id,
         queueId: job.queue,
         timestampForNextRetry: computeTimestampForNextRetry(
@@ -191,7 +225,7 @@ export class Worker implements Closable {
   );
 
   public async close() {
-    await this.distributor.close();
+    this.distributor.close();
     await this.redis.quit();
     await this.redisSub.quit();
   }

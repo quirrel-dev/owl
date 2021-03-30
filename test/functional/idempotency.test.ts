@@ -12,19 +12,21 @@ describeAcrossBackends("Idempotency", (backend) => {
     describe("and override = true", () => {
       it("replaces existing job", async () => {
         await env.producer.enqueue({
+          tenant: "",
           queue: "override-true-queue",
           id: "a",
           payload: "1",
         });
 
         await env.producer.enqueue({
+          tenant: "",
           queue: "override-true-queue",
           id: "a",
           payload: "2",
           override: true,
         });
 
-        const job = await env.producer.findById("override-true-queue", "a");
+        const job = await env.producer.findById("", "override-true-queue", "a");
         expect(job.payload).to.equal("2");
       });
     });
@@ -32,19 +34,25 @@ describeAcrossBackends("Idempotency", (backend) => {
     describe("and override = false", () => {
       it("is a no-op", async () => {
         await env.producer.enqueue({
+          tenant: "",
           queue: "override-false-queue",
           id: "a",
           payload: "1",
         });
 
         await env.producer.enqueue({
+          tenant: "",
           queue: "override-false-queue",
           id: "a",
           payload: "2",
           override: false,
         });
 
-        const job = await env.producer.findById("override-false-queue", "a");
+        const job = await env.producer.findById(
+          "",
+          "override-false-queue",
+          "a"
+        );
         expect(job.payload).to.equal("1");
       });
     });

@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { delay, describeAcrossBackends, waitUntil } from "../util";
+import { describeAcrossBackends, waitUntil } from "../util";
 import { makeActivityEnv } from "./support";
 
 describeAcrossBackends("Activity", (backend) => {
@@ -20,6 +20,7 @@ describeAcrossBackends("Activity", (backend) => {
     const currentDate = new Date();
 
     await env.producer.enqueue({
+      tenant: "",
       queue: "activity:queue",
       id: "a",
       payload: '{"lol":"lel"}',
@@ -27,6 +28,7 @@ describeAcrossBackends("Activity", (backend) => {
     });
 
     await env.producer.enqueue({
+      tenant: "",
       queue: "activity:queue",
       id: "b;wild",
       payload: "lol",
@@ -35,6 +37,7 @@ describeAcrossBackends("Activity", (backend) => {
     });
 
     await env.producer.enqueue({
+      tenant: "",
       queue: "activity:queue",
       id: "repeated",
       payload: "lol",
@@ -46,13 +49,14 @@ describeAcrossBackends("Activity", (backend) => {
       },
     });
 
-    await env.producer.delete("activity:queue", "b;wild");
+    await env.producer.delete("", "activity:queue", "b;wild");
 
     await expectEventsToEventuallyMatch(
       [
         {
           type: "scheduled",
           job: {
+            tenant: "",
             queue: "activity:queue",
             id: "a",
             payload: '{"lol":"lel"}',
@@ -74,6 +78,7 @@ describeAcrossBackends("Activity", (backend) => {
             schedule: undefined,
             exclusive: true,
             retry: [],
+            tenant: "",
           },
         },
         {
@@ -91,48 +96,57 @@ describeAcrossBackends("Activity", (backend) => {
               meta: "10",
               times: 2,
             },
+            tenant: "",
           },
         },
         {
           type: "deleted",
           queue: "activity:queue",
           id: "b;wild",
+          tenant: "",
         },
         {
           type: "requested",
           queue: "activity:queue",
           id: "a",
+          tenant: "",
         },
         {
           type: "requested",
           queue: "activity:queue",
           id: "repeated",
+          tenant: "",
         },
         {
           type: "acknowledged",
           queue: "activity:queue",
           id: "a",
+          tenant: "",
         },
         {
           type: "acknowledged",
           queue: "activity:queue",
           id: "repeated",
+          tenant: "",
         },
         {
           type: "rescheduled",
           queue: "activity:queue",
           runAt: new Date(+currentDate + 10),
           id: "repeated",
+          tenant: "",
         },
         {
           type: "requested",
           queue: "activity:queue",
           id: "repeated",
+          tenant: "",
         },
         {
           type: "acknowledged",
           queue: "activity:queue",
           id: "repeated",
+          tenant: "",
         },
       ],
       100
