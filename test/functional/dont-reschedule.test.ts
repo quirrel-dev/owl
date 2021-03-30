@@ -1,13 +1,18 @@
 import { expect } from "chai";
-import { makeProducerEnv, delay } from "./support";
+import { describeAcrossBackends, makeSignal } from "../util";
+import { makeProducerEnv } from "./support";
 
-function test(backend: "Redis" | "In-Memory") {
-  it(backend + " > dontReschedule", async () => {
-    const producerEnv = makeProducerEnv(backend === "In-Memory");
+describeAcrossBackends("dontReschedule", (backend) => {
+  it("works", async () => {
+    const producerEnv = makeProducerEnv(backend);
     await producerEnv.setup();
 
+    const acknowledged = makeSignal();
     const worker = producerEnv.owl.createWorker(async (job, meta) => {
-      meta.dontReschedule();
+      await worker.acknowledger.acknowledge(meta, {
+        dontReschedule: true,
+      });
+      acknowledged.signal();
     });
 
     await producerEnv.producer.enqueue({
@@ -20,7 +25,7 @@ function test(backend: "Redis" | "In-Memory") {
       },
     });
 
-    await delay(50);
+    await acknowledged;
 
     const job = await producerEnv.producer.findById("q", "a");
     expect(job).to.be.null;
@@ -28,7 +33,4 @@ function test(backend: "Redis" | "In-Memory") {
     await producerEnv.teardown();
     await worker.close();
   });
-}
-
-test("In-Memory");
-test("Redis");
+});

@@ -8,7 +8,12 @@ import type { ScheduleMap } from "../index";
 import createDebug from "debug";
 import { EggTimer } from "./egg-timer";
 import { computeTimestampForNextRetry } from "./retry";
-import { decodeRedisKey, encodeRedisKey } from "../encodeRedisKey";
+import {
+  AcknowledgementDescriptor,
+  Acknowledger,
+  OnError,
+} from "../shared/acknowledger";
+import { decodeRedisKey } from "../encodeRedisKey";
 
 const debug = createDebug("owl:worker");
 
@@ -39,30 +44,13 @@ declare module "ioredis" {
       | -1
       | number
     >;
-    acknowledge(
-      jobTableQueueIdKey: string,
-      jobTableQueueIndex: string,
-      processingKey: string,
-      scheduledQueueKey: string,
-      blockedJobsKey: string,
-      blockedQueuesSetKey: string,
-      softBlockCounterKey: string,
-      id: string,
-      queue: string,
-      timestampToRescheduleFor: number | undefined
-    ): Promise<void>;
   }
 }
 
-export interface ProcessorMeta {
-  dontReschedule(): void;
-  nextExecDate?: Date;
-}
 export type Processor = (
   job: Readonly<Job>,
-  processorMeta: ProcessorMeta
+  ackDescriptor: AcknowledgementDescriptor
 ) => Promise<void>;
-export type OnError = (job: Job, error: Error) => void;
 
 export class Worker implements Closable {
   private readonly currentlyProcessingJobs: Set<Promise<void>> = new Set();
@@ -72,35 +60,36 @@ export class Worker implements Closable {
   private readonly redis;
   private readonly redisSub;
 
-  private readonly eggTimer = new EggTimer(() => this.events.emit("next"));
+  private readonly eggTimer = new EggTimer(() =>
+    this.events.emit("next", "timer")
+  );
   private queueIsKnownToBeEmpty = false;
+
+  public readonly acknowledger: Acknowledger;
 
   constructor(
     redisFactory: () => Redis,
     private readonly scheduleMap: ScheduleMap<string>,
     private readonly processor: Processor,
-    private readonly onError?: OnError,
+    onError?: OnError,
     private readonly maximumConcurrency = 100
   ) {
     this.redis = redisFactory();
     this.redisSub = redisFactory();
+
+    this.acknowledger = new Acknowledger(this.redis, onError);
 
     this.redis.defineCommand("request", {
       lua: fs.readFileSync(path.join(__dirname, "request.lua")).toString(),
       numberOfKeys: 4,
     });
 
-    this.redis.defineCommand("acknowledge", {
-      lua: fs.readFileSync(path.join(__dirname, "acknowledge.lua")).toString(),
-      numberOfKeys: 7,
-    });
-
     this.events.on("next", (d) => this.requestNextJobs(d));
 
-    this.redisSub.on("message", (channel) => {
+    this.redisSub.on("message", (msg) => {
       setImmediate(() => {
         this.queueIsKnownToBeEmpty = false;
-        this.events.emit("next", "sub");
+        this.events.emit("next", "sub:" + msg);
       });
     });
 
@@ -167,7 +156,7 @@ export class Worker implements Closable {
 
     if (result === -1) {
       debug("requestNextJobs(): job's blocked", result);
-      this.events.emit("next");
+      this.queueIsKnownToBeEmpty = true;
       return;
     }
 
@@ -212,97 +201,47 @@ export class Worker implements Closable {
         retry,
       };
 
-      let nextExecDate: number | undefined = undefined;
+      let nextExecutionDate: number | undefined = undefined;
 
       if (max_times === "" || +count < +max_times) {
-        nextExecDate = this.getNextExecutionDate(
+        nextExecutionDate = this.getNextExecutionDate(
           schedule_type,
           schedule_meta,
           runAt
         );
       }
 
-      let dontReschedule = false;
-      let hasFailed = false;
-      try {
-        debug(`requestNextJobs(): job #${id} - started working`);
-        await this.processor(job, {
-          dontReschedule() {
-            dontReschedule = true;
-          },
-          nextExecDate: nextExecDate ? new Date(nextExecDate) : undefined,
-        });
-        debug(`requestNextJobs(): job #${id} - finished working`);
-      } catch (error) {
-        hasFailed = true;
-
-        debug(`requestNextJobs(): job #${id} - failed`);
-
-        const isRetryable = !!computeTimestampForNextRetry(
+      const ackDescriptor: AcknowledgementDescriptor = {
+        jobId: job.id,
+        queueId: job.queue,
+        timestampForNextRetry: computeTimestampForNextRetry(
           runAt,
           retry,
           +count
-        );
+        ),
+        nextExecutionDate,
+      };
 
-        const event = isRetryable ? "retry" : "fail";
-        const pipeline = this.redis.pipeline();
+      try {
+        debug(`requestNextJobs(): job #${id} - started working`);
 
-        const errorString = encodeURIComponent(error);
-
-        const _queue = encodeRedisKey(queue);
-        const _id = encodeRedisKey(id);
-
-        pipeline.publish(event, `${_queue}:${_id}:${errorString}`);
-        pipeline.publish(_queue, `${event}:${_id}:${errorString}`);
-        pipeline.publish(`${_queue}:${_id}`, `${event}:${errorString}`);
-        pipeline.publish(`${_queue}:${_id}:${event}`, errorString);
-
-        await pipeline.exec();
-
-        if (!isRetryable) {
-          this.onError?.(job, error);
-        }
-      } finally {
-        if (dontReschedule) {
-          nextExecDate = undefined;
-        }
-
-        if (hasFailed && retry.length) {
-          nextExecDate = computeTimestampForNextRetry(runAt, retry, +count);
-        }
-
-        await this.redis.acknowledge(
-          `jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`,
-          `queues:${encodeRedisKey(queue)}`,
-          "processing",
-          "queue",
-          `blocked:${encodeRedisKey(queue)}`,
-          "blocked-queues",
-          "soft-block",
-          encodeRedisKey(id),
-          encodeRedisKey(queue),
-          nextExecDate
-        );
-        if (nextExecDate) {
-          debug(
-            `requestNextJobs(): job #${id} - acknowledged (next execution: ${nextExecDate})`
-          );
-        } else {
-          debug(`requestNextJobs(): job #${id} - acknowledged`);
-        }
+        await this.processor(job, ackDescriptor);
+      } catch (error) {
+        debug(`requestNextJobs(): job #${id} - found error`);
+        await this.acknowledger.reportFailure(ackDescriptor, error);
       }
     })();
 
     this.currentlyProcessingJobs.add(currentlyProcessing);
     if (!this.queueIsKnownToBeEmpty) {
-      this.events.emit("next");
+      this.events.emit("next", "feed");
     }
 
     await currentlyProcessing;
     this.currentlyProcessingJobs.delete(currentlyProcessing);
 
     if (!this.queueIsKnownToBeEmpty) {
-      this.events.emit("next");
+      this.events.emit("next", "thank u, next");
     }
   }
 

@@ -1,54 +1,55 @@
 import { expect } from "chai";
+import { delay, describeAcrossBackends, waitUntil } from "../util";
 import { makeActivityEnv } from "./support";
 
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+describeAcrossBackends("Activity", (backend) => {
+  const env = makeActivityEnv(backend);
 
-function test(backend: "Redis" | "In-Memory") {
-  describe(backend + " > Activity", () => {
-    const env = makeActivityEnv(backend === "In-Memory");
+  beforeEach(env.setup);
+  afterEach(env.teardown);
 
-    beforeEach(env.setup);
-    afterEach(env.teardown);
+  async function expectEventsToEventuallyMatch(
+    members: any[],
+    maxWait: number
+  ) {
+    await waitUntil(() => env.events.length === members.length, maxWait);
+    expect(env.events).to.have.deep.members(members);
+  }
 
-    it("publishes all relevant information", async () => {
-      await delay(50);
+  it("publishes all relevant information", async () => {
+    const currentDate = new Date();
 
-      const currentDate = new Date();
+    await env.producer.enqueue({
+      queue: "activity:queue",
+      id: "a",
+      payload: '{"lol":"lel"}',
+      runAt: currentDate,
+    });
 
-      await env.producer.enqueue({
-        queue: "activity:queue",
-        id: "a",
-        payload: '{"lol":"lel"}',
-        runAt: currentDate,
-      });
+    await env.producer.enqueue({
+      queue: "activity:queue",
+      id: "b;wild",
+      payload: "lol",
+      runAt: new Date(9999999999999),
+      exclusive: true,
+    });
 
-      await env.producer.enqueue({
-        queue: "activity:queue",
-        id: "b;wild",
-        payload: "lol",
-        runAt: new Date(9999999999999),
-        exclusive: true,
-      });
+    await env.producer.enqueue({
+      queue: "activity:queue",
+      id: "repeated",
+      payload: "lol",
+      runAt: currentDate,
+      schedule: {
+        type: "every",
+        meta: "10",
+        times: 2,
+      },
+    });
 
-      await env.producer.enqueue({
-        queue: "activity:queue",
-        id: "repeated",
-        payload: "lol",
-        runAt: currentDate,
-        schedule: {
-          type: "every",
-          meta: "10",
-          times: 2,
-        },
-      });
+    await env.producer.delete("activity:queue", "b;wild");
 
-      await env.producer.delete("activity:queue", "b;wild");
-
-      await delay(50);
-
-      expect(env.events).to.have.deep.members([
+    await expectEventsToEventuallyMatch(
+      [
         {
           type: "scheduled",
           job: {
@@ -133,10 +134,8 @@ function test(backend: "Redis" | "In-Memory") {
           queue: "activity:queue",
           id: "repeated",
         },
-      ]);
-    });
+      ],
+      100
+    );
   });
-}
-
-test("Redis");
-test("In-Memory");
+});
