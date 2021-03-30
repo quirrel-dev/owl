@@ -58,8 +58,7 @@ end
 
 redis.call("HINCRBY", tenantPrefix .. "soft-block", queue, 1)
 
-local time = redis.call("TIME")[1]
-redis.call("ZADD", tenantPrefix .. "processing", time, queueAndId)
+redis.call("ZADD", tenantPrefix .. "processing", currentTimestamp, queueAndId)
 
 redis.call("PUBLISH", tenantPrefix .. queue .. ":" .. id, "requested")
 redis.call("PUBLISH", tenantPrefix .. "requested", queue .. ":" .. id)

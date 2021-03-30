@@ -43,10 +43,6 @@ export class StaleChecker implements Closable {
     return now - this.staleAfter;
   }
 
-  private toRedisDate(ms: number): number {
-    return Math.floor(ms / 1000);
-  }
-
   private async zremrangebyscoreandreturn(
     key: string,
     min: string | number,
@@ -80,7 +76,7 @@ export class StaleChecker implements Closable {
     const staleJobDescriptors = await this.zremrangebyscoreandreturn(
       "processing",
       "-inf",
-      this.toRedisDate(this.getMaxDate())
+      this.getMaxDate()
     );
 
     if (staleJobDescriptors.length === 0) {
