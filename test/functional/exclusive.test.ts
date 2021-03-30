@@ -60,6 +60,17 @@ describeAcrossBackends("Exclusive", (backend) => {
     });
   });
 
+  async function expectToBeExecutedInSerial() {
+    await waitUntilEvent("acknowledged", "b", 100);
+
+    expectInOrder([
+      eventIndex("requested", "a"),
+      eventIndex("acknowledged", "a"),
+      eventIndex("requested", "b"),
+      eventIndex("acknowledged", "b"),
+    ]);
+  }
+
   describe("exclusive: true", () => {
     it("executes jobs in serial", async () => {
       await env.producer.enqueue({
@@ -77,14 +88,7 @@ describeAcrossBackends("Exclusive", (backend) => {
         exclusive: true,
       });
 
-      await waitUntilEvent("acknowledged", "b");
-
-      expectInOrder([
-        eventIndex("requested", "a"),
-        eventIndex("acknowledged", "a"),
-        eventIndex("requested", "b"),
-        eventIndex("acknowledged", "b"),
-      ]);
+      await expectToBeExecutedInSerial();
     });
   });
 
@@ -106,15 +110,9 @@ describeAcrossBackends("Exclusive", (backend) => {
         exclusive: true,
       });
 
-      await waitUntilEvent("acknowledged", "b");
-
-      expectInOrder([
-        eventIndex("requested", "a"),
-        eventIndex("acknowledged", "a"),
-        eventIndex("requested", "b"),
-        eventIndex("acknowledged", "b"),
-      ]);
+      await expectToBeExecutedInSerial();
     });
+
     it("does not starve", async () => {
       await env.producer.enqueue({
         tenant: "",
