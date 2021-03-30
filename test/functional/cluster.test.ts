@@ -10,6 +10,7 @@ describeAcrossBackends("Cluster", (backend) => {
   afterEach(async () => {
     await env.teardown();
     await Promise.all(closables.map((c) => c.close()));
+    closables = []
   });
 
   let closables: Closable[] = [];

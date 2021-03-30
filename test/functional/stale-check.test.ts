@@ -75,7 +75,7 @@ describeAcrossBackends("stale-check", (backend) => {
     await env.producer.staleChecker.check();
     expect(env.errors).to.deep.equal([]);
 
-    await waitUntil(() => calls === 2, 700);
+    await waitUntil(() => calls === 2, 800);
   });
 
   it("does not emit errors if everything is fine", async () => {
