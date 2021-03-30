@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { delay, describeAcrossBackends, waitUntil } from "../util";
+import { delay, describeAcrossBackends } from "../util";
 import { makeWorkerEnv } from "./support";
 
 describeAcrossBackends("Schedule", (backend) => {
@@ -33,7 +33,7 @@ describeAcrossBackends("Schedule", (backend) => {
 
         expect(env.jobs.length).to.be.closeTo(
           expectedExecutions,
-          backend === "Redis" ? 1.5 : 3
+          backend === "Redis" ? 1.5 : 5
         );
         expect(env.nextExecDates.every((value) => typeof value === "number")).to
           .be.true;
