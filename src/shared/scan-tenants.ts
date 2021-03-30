@@ -3,13 +3,15 @@ import type { Redis } from "ioredis";
 export async function* scanTenants(redis: Redis) {
   let cursor = 0;
 
-  yield [""];
+  if (await redis.exists("queue")) {
+    yield [""];
+  }
 
   do {
     const [newCursor, queueKeys] = await redis.scan(
       cursor,
       "MATCH",
-      "{*}:queue"
+      "{*}queue"
     );
 
     yield queueKeys.map((k) => k.slice(1, k.indexOf("}")));
