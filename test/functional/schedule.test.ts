@@ -33,7 +33,7 @@ describeAcrossBackends("Schedule", (backend) => {
 
         expect(env.jobs.length).to.be.closeTo(
           expectedExecutions,
-          backend === "Redis" ? 1.5 : 5
+          backend === "Redis" ? 1.5 : 8
         );
         expect(env.nextExecDates.every((value) => typeof value === "number")).to
           .be.true;
