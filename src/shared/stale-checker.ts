@@ -13,15 +13,15 @@ export interface StaleCheckerConfig {
   staleAfter?: number;
 }
 
-export class StaleChecker implements Closable {
+export class StaleChecker<ScheduleType extends string> implements Closable {
   private intervalId?: NodeJS.Timeout;
 
   private readonly staleAfter;
 
   constructor(
     private readonly redis: Redis,
-    private readonly acknowledger: Acknowledger,
-    private readonly producer: Producer<any>,
+    private readonly acknowledger: Acknowledger<ScheduleType>,
+    private readonly producer: Producer<ScheduleType>,
     config: StaleCheckerConfig = {}
   ) {
     this.staleAfter = config.staleAfter ?? 60 * oneMinute;
@@ -108,13 +108,14 @@ export class StaleChecker implements Closable {
               job.count
             );
 
-            this.acknowledger._reportFailure(
+            await this.acknowledger._reportFailure(
               {
                 tenant,
                 queueId: job.queue,
                 jobId: job.id,
                 timestampForNextRetry,
               },
+              job,
               error,
               pipeline
             );

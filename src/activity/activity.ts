@@ -1,11 +1,11 @@
 import { Redis } from "ioredis";
-import RedisMock from "ioredis-mock";
 import { Closable } from "../Closable";
 import {
   decodeRedisKey,
   encodeRedisKey,
   tenantToRedisPrefix,
 } from "../encodeRedisKey";
+import { isRedisMock } from "../isRedisMock";
 import { Job } from "../Job";
 import { Producer } from "../producer/producer";
 
@@ -103,7 +103,7 @@ export class Activity<ScheduleType extends string> implements Closable {
     this.redis = redisFactory();
     this.producer = new Producer<ScheduleType>(redisFactory);
 
-    if (this.redis instanceof RedisMock) {
+    if (isRedisMock(this.redis)) {
       this.redis.on("message", (channel, message) =>
         this.handleMessage(channel, message)
       );

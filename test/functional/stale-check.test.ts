@@ -16,7 +16,7 @@ describeAcrossBackends("stale-check", (backend) => {
     await env.teardown();
   });
 
-  let worker: Worker;
+  let worker: Worker<any>;
 
   it("emits errors for stalling jobs", async () => {
     const received = makeSignal();

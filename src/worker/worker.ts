@@ -11,8 +11,8 @@ import {
 import { decodeRedisKey, tenantToRedisPrefix } from "../encodeRedisKey";
 import { JobDistributor } from "./job-distributor";
 import { defineLocalCommands } from "../redis-commands";
-import RedisMock from "ioredis-mock";
 import { scanTenants } from "../shared/scan-tenants";
+import { isRedisMock } from "../isRedisMock";
 
 declare module "ioredis" {
   interface Commands {
@@ -39,8 +39,8 @@ declare module "ioredis" {
   }
 }
 
-export type Processor = (
-  job: Readonly<Job>,
+export type Processor<ScheduleType extends string> = (
+  job: Readonly<Job<ScheduleType>>,
   ackDescriptor: AcknowledgementDescriptor
 ) => Promise<void>;
 
@@ -52,23 +52,23 @@ function parseTenantFromChannel(topic: string) {
   return "";
 }
 
-export class Worker implements Closable {
+export class Worker<ScheduleType extends string> implements Closable {
   private readonly redis;
   private readonly redisSub;
 
-  public readonly acknowledger: Acknowledger;
+  public readonly acknowledger: Acknowledger<ScheduleType>;
 
   constructor(
     redisFactory: () => Redis,
-    private readonly scheduleMap: ScheduleMap<string>,
-    private readonly processor: Processor,
-    onError?: OnError,
+    private readonly scheduleMap: ScheduleMap<ScheduleType>,
+    private readonly processor: Processor<ScheduleType>,
+    onError?: OnError<ScheduleType>,
     private readonly maximumConcurrency = 100
   ) {
     this.redis = redisFactory();
     this.redisSub = redisFactory();
 
-    this.acknowledger = new Acknowledger(this.redis, onError);
+    this.acknowledger = new Acknowledger(this.redis, null as any, onError);
 
     defineLocalCommands(this.redis, __dirname);
   }
@@ -85,7 +85,7 @@ export class Worker implements Closable {
       });
     };
 
-    if (this.redisSub instanceof RedisMock) {
+    if (isRedisMock(this.redisSub)) {
       this.redisSub.on("message", (channel) => {
         handleMessage(channel);
       });
@@ -104,7 +104,7 @@ export class Worker implements Closable {
   }
 
   private getNextExecutionDate(
-    schedule_type: string,
+    schedule_type: ScheduleType | undefined,
     schedule_meta: string,
     lastExecution: Date
   ): number | undefined {
@@ -164,19 +164,20 @@ export class Worker implements Closable {
         _id,
         payload,
         runAtTimestamp,
-        schedule_type,
+        _schedule_type,
         schedule_meta,
         count,
         max_times,
         exclusive,
         retryJSON,
       ] = result;
+      const schedule_type = _schedule_type as ScheduleType | undefined;
       const queue = decodeRedisKey(_queue);
       const id = decodeRedisKey(_id);
       const runAt = new Date(+runAtTimestamp);
       const retry = JSON.parse(retryJSON ?? "[]") as number[];
 
-      const job: Job = {
+      const job: Job<ScheduleType> = {
         tenant,
         queue,
         id,
@@ -219,7 +220,7 @@ export class Worker implements Closable {
       try {
         await this.processor(job, ackDescriptor);
       } catch (error) {
-        await this.acknowledger.reportFailure(ackDescriptor, error);
+        await this.acknowledger.reportFailure(ackDescriptor, job, error);
       }
     },
     this.maximumConcurrency

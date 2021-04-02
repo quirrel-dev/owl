@@ -44,18 +44,18 @@ export class Producer<ScheduleType extends string> implements Closable {
   private readonly redis;
 
   public readonly acknowledger;
-  public readonly staleChecker: StaleChecker;
+  public readonly staleChecker: StaleChecker<ScheduleType>;
 
   constructor(
     redisFactory: () => Redis,
-    onError?: OnError,
+    onError?: OnError<ScheduleType>,
     staleCheckerConfig?: StaleCheckerConfig
   ) {
     this.redis = redisFactory();
 
     defineLocalCommands(this.redis, __dirname);
 
-    this.acknowledger = new Acknowledger(this.redis, onError);
+    this.acknowledger = new Acknowledger<ScheduleType>(this.redis, this, onError);
     this.staleChecker = new StaleChecker(
       this.redis,
       this.acknowledger,

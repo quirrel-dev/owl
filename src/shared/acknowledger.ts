@@ -1,6 +1,8 @@
 import createDebug from "debug";
 import { Pipeline, Redis } from "ioredis";
 import { encodeRedisKey, tenantToRedisPrefix } from "../encodeRedisKey";
+import { Job } from "../Job";
+import { Producer } from "../producer/producer";
 import { defineLocalCommands } from "../redis-commands";
 
 const debug = createDebug("owl:acknowledger");
@@ -29,24 +31,59 @@ export interface AcknowledgementDescriptor {
   nextExecutionDate?: number;
 }
 
-export type OnError = (job: AcknowledgementDescriptor, error: Error) => void;
+export type OnError<ScheduleType extends string> = (
+  ack: AcknowledgementDescriptor,
+  job: Job<ScheduleType>,
+  error: any
+) => void;
 
-export class Acknowledger {
+export class Acknowledger<ScheduleType extends string> {
   constructor(
     private readonly redis: Redis,
-    private readonly onError?: OnError
+    private readonly producer: Producer<ScheduleType>,
+    private readonly onError?: OnError<ScheduleType>
   ) {
     defineLocalCommands(this.redis, __dirname);
   }
 
-  public _reportFailure(
+  public async _reportFailure(
     descriptor: AcknowledgementDescriptor,
+    job: Job<ScheduleType> | null,
     error: any,
-    pipeline: Pipeline
+    pipeline: Pipeline,
+    options: { dontReschedule?: boolean } = {}
   ) {
-    const { timestampForNextRetry, queueId, jobId } = descriptor;
+    if (!job) {
+      job = await this.producer.findById(
+        descriptor.tenant,
+        descriptor.queueId,
+        descriptor.jobId
+      );
+
+      if (!job) {
+        console.error("Job couldn't be found, but should be here.");
+        job = {
+          id: descriptor.jobId,
+          queue: descriptor.queueId,
+          tenant: descriptor.tenant,
+          count: 1,
+          exclusive: false,
+          payload: "ERROR: Job couldn't be found",
+          retry: [],
+          runAt: new Date(0),
+        };
+      }
+    }
+
+    const {
+      timestampForNextRetry,
+      queueId,
+      jobId,
+      nextExecutionDate,
+    } = descriptor;
     const isRetryable = !!timestampForNextRetry;
     const event = isRetryable ? "retry" : "fail";
+    const isScheduled = !!nextExecutionDate;
 
     const errorString = encodeURIComponent(error);
 
@@ -63,19 +100,26 @@ export class Acknowledger {
     );
     pipeline.publish(prefix + `${_queueId}:${_jobId}:${event}`, errorString);
 
-    pipeline.acknowledge(prefix, _jobId, _queueId, timestampForNextRetry);
+    pipeline.acknowledge(
+      prefix,
+      _jobId,
+      _queueId,
+      isScheduled && options.dontReschedule ? undefined : timestampForNextRetry
+    );
 
     if (!isRetryable) {
-      this.onError?.(descriptor, error);
+      this.onError?.(descriptor, job, error);
     }
   }
 
   public async reportFailure(
     descriptor: AcknowledgementDescriptor,
-    error: any
+    job: Job<ScheduleType> | null,
+    error: any,
+    options: { dontReschedule?: boolean } = {}
   ) {
     const pipeline = this.redis.pipeline();
-    this._reportFailure(descriptor, error, pipeline);
+    await this._reportFailure(descriptor, job, error, pipeline, options);
     await pipeline.exec();
   }
 

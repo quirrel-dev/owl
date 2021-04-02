@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { Worker } from "../../src/worker/worker";
-import { delay, describeAcrossBackends, makeSignal } from "../util";
+import { describeAcrossBackends, makeSignal } from "../util";
 import { makeProducerEnv } from "./support";
 
 describeAcrossBackends("dontReschedule", (backend) => {
@@ -10,7 +10,7 @@ describeAcrossBackends("dontReschedule", (backend) => {
     await producerEnv.teardown();
     await worker.close();
   });
-  let worker: Worker;
+  let worker: Worker<any>;
 
   it("works", async () => {
     const acknowledged = makeSignal();

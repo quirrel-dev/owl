@@ -28,7 +28,11 @@ export function makeProducerEnv(
     errors: [],
   };
 
-  function onError(descriptor: AcknowledgementDescriptor, error?: any) {
+  function onError(
+    descriptor: AcknowledgementDescriptor,
+    job: Job<"every">,
+    error?: any
+  ) {
     env.errors.push([descriptor, error]);
   }
 
@@ -82,7 +86,7 @@ export function makeWorkerEnv(
   const producerTeardown = producerEnv.teardown;
 
   const workerEnv: typeof producerEnv & {
-    worker: Worker;
+    worker: Worker<"every">;
     jobs: [number, Job][];
     nextExecDates: (number | undefined)[];
     errors: [Job, Error][];

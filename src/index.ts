@@ -16,14 +16,14 @@ export type ScheduleMap<ScheduleType extends string> = Record<
 
 export interface OwlConfig<ScheduleType extends string> {
   redisFactory: () => Redis;
-  scheduleMap?: ScheduleMap<ScheduleType>;
+  scheduleMap: ScheduleMap<ScheduleType>;
   staleChecker?: StaleCheckerConfig;
-  onError?: OnError;
+  onError?: OnError<ScheduleType>;
 }
 
 export default class Owl<ScheduleType extends string> {
   private readonly redisFactory;
-  private readonly scheduleMap?: ScheduleMap<ScheduleType>;
+  private readonly scheduleMap: ScheduleMap<ScheduleType>;
   private readonly staleCheckerConfig?: StaleCheckerConfig;
   private readonly onError?;
   constructor(config: OwlConfig<ScheduleType>) {
@@ -33,10 +33,10 @@ export default class Owl<ScheduleType extends string> {
     this.onError = config.onError;
   }
 
-  public async createWorker(processor: Processor) {
-    const worker = new Worker(
+  public async createWorker(processor: Processor<ScheduleType>) {
+    const worker = new Worker<ScheduleType>(
       this.redisFactory,
-      this.scheduleMap ?? {},
+      this.scheduleMap,
       processor,
       this.onError
     );
