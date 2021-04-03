@@ -31,7 +31,7 @@
   "homepage": "https://github.com/quirrel-dev/owl#readme",
   "devDependencies": {
     "@istanbuljs/nyc-config-typescript": "^1.0.1",
-    "@types/chai": "^4.2.15",
+    "@types/chai": "^4.2.16",
     "@types/debug": "^4.1.5",
     "@types/ioredis": "^4.22.1",
     "@types/mocha": "^8.2.2",
