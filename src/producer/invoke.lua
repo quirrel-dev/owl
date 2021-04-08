@@ -9,11 +9,11 @@ local newRunAt = ARGV[3]
 local FOUND_AND_INVOKED = 0
 local NOT_FOUND = 1
 
-if redis.call("EXISTS", tenantPrefix .. "jobs:" .. jobQueue .. ":" .. jobId) == 0 then
+local updatedJobs = redis.call("ZADD", tenantPrefix .. "queue", "XX", "CH", newRunAt, jobQueue .. ":" .. jobId)
+
+if updatedJobs == 0 then
   return NOT_FOUND
 end
-
-redis.call("ZADD", tenantPrefix .. "queue", newRunAt, jobQueue .. ":" .. jobId)
 
 redis.call("PUBLISH", tenantPrefix .. jobQueue .. ":" .. jobId, "invoked")
 redis.call("PUBLISH", tenantPrefix .. "invoked", jobQueue .. ":" .. jobId)
