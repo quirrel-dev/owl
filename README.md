@@ -18,10 +18,14 @@ import Redis from "ioredis"
 
 const owl = new Owl(() => new Redis())
 
-owl.createWorker(async job => {
+const worker = owl.createWorker(async (job, ackDescriptor) => {
   console.log(`${job.queue}: Received job #${job.id} with payload ${job.payload}.`);
   // ...
+
+  await worker.acknowledger.acknowledge(ackDescriptor);
 })
+
+await worker.start();
 
 const producer = owl.createProducer()
 

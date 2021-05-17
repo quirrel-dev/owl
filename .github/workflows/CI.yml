@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     container: node:12
 
+    timeout-minutes: 3
+
     services:
       redis:
         image: redis

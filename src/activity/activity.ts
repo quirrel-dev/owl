@@ -1,7 +1,10 @@
 import { Redis } from "ioredis";
-import RedisMock from "ioredis-mock";
 import { Closable } from "../Closable";
-import { decodeRedisKey, encodeRedisKey } from "../encodeRedisKey";
+import {
+  decodeRedisKey,
+  encodeRedisKey,
+  tenantToRedisPrefix,
+} from "../encodeRedisKey";
 import { Job } from "../Job";
 import { Producer } from "../producer/producer";
 
@@ -52,12 +55,14 @@ interface ScheduledEvent {
 
 interface InvokedEvent {
   type: "invoked";
+  tenant: string;
   id: string;
   queue: string;
 }
 
 interface RescheduledEvent {
   type: "rescheduled";
+  tenant: string;
   id: string;
   queue: string;
   runAt: Date;
@@ -65,18 +70,21 @@ interface RescheduledEvent {
 
 interface DeletedEvent {
   type: "deleted";
+  tenant: string;
   id: string;
   queue: string;
 }
 
 interface RequestedEvent {
   type: "requested";
+  tenant: string;
   id: string;
   queue: string;
 }
 
 interface AcknowledgedEvent {
   type: "acknowledged";
+  tenant: string;
   id: string;
   queue: string;
 }
@@ -86,6 +94,7 @@ export class Activity<ScheduleType extends string> implements Closable {
   private producer;
 
   constructor(
+    public readonly tenant: string,
     redisFactory: () => Redis,
     private readonly onEvent: OnActivity,
     options: SubscriptionOptions = {}
@@ -105,12 +114,22 @@ export class Activity<ScheduleType extends string> implements Closable {
       options.id = encodeRedisKey(options.id);
     }
 
-    this.redis.psubscribe(`${options.queue ?? "*"}:${options.id ?? "*"}`);
+    this.redis.psubscribe(
+      `${tenantToRedisPrefix(tenant)}${options.queue ?? "*"}:${
+        options.id ?? "*"
+      }`
+    );
   }
 
   private async handleMessage(channel: string, message: string) {
     const [_type, ...args] = splitEvent(message, 9);
     const type = _type as OnActivityEvent["type"];
+
+    let tenant = "";
+    if (channel.startsWith("{")) {
+      tenant = channel.slice(1, channel.indexOf("}"));
+      channel = channel.slice(channel.indexOf("}") + 1);
+    }
 
     const channelParts = channel.split(":").map(decodeRedisKey);
     if (channelParts.length !== 2) {
@@ -133,6 +152,7 @@ export class Activity<ScheduleType extends string> implements Closable {
       await this.onEvent({
         type: "scheduled",
         job: {
+          tenant,
           id,
           queue,
           payload,
@@ -153,6 +173,7 @@ export class Activity<ScheduleType extends string> implements Closable {
       const [runDate] = args;
       await this.onEvent({
         type: "rescheduled",
+        tenant,
         id,
         queue,
         runAt: new Date(+runDate),
@@ -160,6 +181,7 @@ export class Activity<ScheduleType extends string> implements Closable {
     } else {
       await this.onEvent({
         type,
+        tenant,
         id,
         queue,
       });

@@ -1,27 +1,23 @@
-import { EventEmitter } from "events";
 import { Redis } from "ioredis";
 import { Closable } from "../Closable";
 import { Job } from "../Job";
-import * as fs from "fs";
-import * as path from "path";
 import type { ScheduleMap } from "../index";
-import createDebug from "debug";
-import { EggTimer } from "./egg-timer";
 import { computeTimestampForNextRetry } from "./retry";
-import { decodeRedisKey, encodeRedisKey } from "../encodeRedisKey";
-
-const debug = createDebug("owl:worker");
+import {
+  AcknowledgementDescriptor,
+  Acknowledger,
+  OnError,
+} from "../shared/acknowledger";
+import { decodeRedisKey, tenantToRedisPrefix } from "../encodeRedisKey";
+import { JobDistributor } from "./job-distributor";
+import { defineLocalCommands } from "../redis-commands";
+import { scanTenants } from "../shared/scan-tenants";
 
 declare module "ioredis" {
   interface Commands {
     request(
-      queueKey: string,
-      processingKey: string,
-      blockedQueuesKey: string,
-      softBlockCounterKey: string,
-      jobTablePrefix: string,
-      currentTimestamp: number,
-      blockedQueuesPrefix: string
+      tenantPrefix: string,
+      currentTimestamp: number
     ): Promise<
       | [
           queue: string,
@@ -39,84 +35,69 @@ declare module "ioredis" {
       | -1
       | number
     >;
-    acknowledge(
-      jobTableQueueIdKey: string,
-      jobTableQueueIndex: string,
-      processingKey: string,
-      scheduledQueueKey: string,
-      blockedJobsKey: string,
-      blockedQueuesSetKey: string,
-      softBlockCounterKey: string,
-      id: string,
-      queue: string,
-      timestampToRescheduleFor: number | undefined
-    ): Promise<void>;
   }
 }
 
-export interface ProcessorMeta {
-  dontReschedule(): void;
-  nextExecDate?: Date;
-}
-export type Processor = (
-  job: Readonly<Job>,
-  processorMeta: ProcessorMeta
+export type Processor<ScheduleType extends string> = (
+  job: Readonly<Job<ScheduleType>>,
+  ackDescriptor: AcknowledgementDescriptor
 ) => Promise<void>;
-export type OnError = (job: Job, error: Error) => void;
 
-export class Worker implements Closable {
-  private readonly currentlyProcessingJobs: Set<Promise<void>> = new Set();
-  private readonly events = new EventEmitter();
-  private closing = false;
+function parseTenantFromChannel(topic: string) {
+  if (topic.startsWith("{")) {
+    return topic.slice(1, topic.indexOf("}"));
+  }
 
+  return "";
+}
+
+export class Worker<ScheduleType extends string> implements Closable {
   private readonly redis;
   private readonly redisSub;
 
-  private readonly eggTimer = new EggTimer(() => this.events.emit("next"));
-  private queueIsKnownToBeEmpty = false;
+  public readonly acknowledger: Acknowledger<ScheduleType>;
 
   constructor(
     redisFactory: () => Redis,
-    private readonly scheduleMap: ScheduleMap<string>,
-    private readonly processor: Processor,
-    private readonly onError?: OnError,
+    private readonly scheduleMap: ScheduleMap<ScheduleType>,
+    private readonly processor: Processor<ScheduleType>,
+    onError?: OnError<ScheduleType>,
     private readonly maximumConcurrency = 100
   ) {
     this.redis = redisFactory();
     this.redisSub = redisFactory();
 
-    this.redis.defineCommand("request", {
-      lua: fs.readFileSync(path.join(__dirname, "request.lua")).toString(),
-      numberOfKeys: 4,
-    });
+    this.acknowledger = new Acknowledger(this.redis, null as any, onError);
 
-    this.redis.defineCommand("acknowledge", {
-      lua: fs.readFileSync(path.join(__dirname, "acknowledge.lua")).toString(),
-      numberOfKeys: 7,
-    });
-
-    this.events.on("next", (d) => this.requestNextJobs(d));
-
-    this.redisSub.on("message", (channel) => {
-      setImmediate(() => {
-        this.queueIsKnownToBeEmpty = false;
-        this.events.emit("next", "sub");
-      });
-    });
-
-    this.redisSub
-      .subscribe("scheduled", "invoked", "rescheduled", "unblocked")
-      .then(() => {
-        this.events.emit("next", "init");
-      });
+    defineLocalCommands(this.redis, __dirname);
   }
 
-  private isMaxedOut() {
-    return this.currentlyProcessingJobs.size >= this.maximumConcurrency;
+  public async start() {
+    await this.listenForPubs();
+    this.distributor.start();
+  }
+
+  private async listenForPubs() {
+    const handleMessage = (channel: string) => {
+      setImmediate(() => {
+        this.distributor.checkForNewJobs(parseTenantFromChannel(channel));
+      });
+    };
+
+    this.redisSub.on("pmessage", (_pattern, channel) => {
+      handleMessage(channel);
+    });
+
+    await this.redisSub.psubscribe(
+      "*scheduled",
+      "*invoked",
+      "*rescheduled",
+      "*unblocked"
+    );
   }
 
   private getNextExecutionDate(
-    schedule_type: string,
+    schedule_type: ScheduleType | undefined,
     schedule_meta: string,
     lastExecution: Date
   ): number | undefined {
@@ -137,65 +118,60 @@ export class Worker implements Closable {
     return +result;
   }
 
-  private async requestNextJobs(origin: string = "") {
-    debug("requestNextJobs() called", origin);
-    if (this.isMaxedOut()) {
-      debug("requestNextJobs(): skipped (worker is maxed out)");
-      return;
-    }
-    if (this.closing) {
-      debug("requestNextJobs(): skipped (worker is closing)");
-      return;
-    }
+  private readonly distributor = new JobDistributor(
+    () => scanTenants(this.redis),
+    async (tenant) => {
+      const result = await this.redis.request(
+        tenantToRedisPrefix(tenant),
+        Date.now()
+      );
 
-    const result = await this.redis.request(
-      "queue",
-      "processing",
-      "blocked-queues",
-      "soft-block",
-      "jobs",
-      Date.now(),
-      "blocked"
-    );
+      if (!result) {
+        return ["empty"];
+      }
 
-    if (!result) {
-      debug("requestNextJobs(): skipped (queue is empty)");
-      this.queueIsKnownToBeEmpty = true;
-      this.eggTimer.reset();
-      return;
-    }
+      if (result === -1) {
+        return ["retry"];
+      }
 
-    if (result === -1) {
-      debug("requestNextJobs(): job's blocked", result);
-      this.events.emit("next");
-      return;
-    }
+      if (typeof result === "number") {
+        const timerMaxLimit = 2147483647;
+        const timeout = result - Date.now();
+        if (timeout > timerMaxLimit) {
+          return ["empty"];
+        } else {
+          return [
+            "wait",
+            new Promise((resolve) => {
+              setTimeout(resolve, timeout);
+            }),
+          ];
+        }
+      }
 
-    if (typeof result === "number") {
-      debug("requestNextJobs(): skipped (next job due at %o)", result);
-      this.eggTimer.setTimer(result);
-      return;
-    }
-
-    const currentlyProcessing = (async () => {
+      return ["success", result];
+    },
+    async (result, tenant) => {
       const [
         _queue,
         _id,
         payload,
         runAtTimestamp,
-        schedule_type,
+        _schedule_type,
         schedule_meta,
         count,
         max_times,
         exclusive,
         retryJSON,
       ] = result;
+      const schedule_type = _schedule_type as ScheduleType | undefined;
       const queue = decodeRedisKey(_queue);
       const id = decodeRedisKey(_id);
       const runAt = new Date(+runAtTimestamp);
       const retry = JSON.parse(retryJSON ?? "[]") as number[];
 
-      const job: Job = {
+      const job: Job<ScheduleType> = {
+        tenant,
         queue,
         id,
         payload,
@@ -212,103 +188,39 @@ export class Worker implements Closable {
         retry,
       };
 
-      let nextExecDate: number | undefined = undefined;
+      let nextExecutionDate: number | undefined = undefined;
 
       if (max_times === "" || +count < +max_times) {
-        nextExecDate = this.getNextExecutionDate(
+        nextExecutionDate = this.getNextExecutionDate(
           schedule_type,
           schedule_meta,
           runAt
         );
       }
 
-      let dontReschedule = false;
-      let hasFailed = false;
-      try {
-        debug(`requestNextJobs(): job #${id} - started working`);
-        await this.processor(job, {
-          dontReschedule() {
-            dontReschedule = true;
-          },
-          nextExecDate: nextExecDate ? new Date(nextExecDate) : undefined,
-        });
-        debug(`requestNextJobs(): job #${id} - finished working`);
-      } catch (error) {
-        hasFailed = true;
-
-        debug(`requestNextJobs(): job #${id} - failed`);
-
-        const isRetryable = !!computeTimestampForNextRetry(
+      const ackDescriptor: AcknowledgementDescriptor = {
+        tenant,
+        jobId: job.id,
+        queueId: job.queue,
+        timestampForNextRetry: computeTimestampForNextRetry(
           runAt,
           retry,
           +count
-        );
+        ),
+        nextExecutionDate,
+      };
 
-        const event = isRetryable ? "retry" : "fail";
-        const pipeline = this.redis.pipeline();
-
-        const errorString = encodeURIComponent(error);
-
-        const _queue = encodeRedisKey(queue);
-        const _id = encodeRedisKey(id);
-
-        pipeline.publish(event, `${_queue}:${_id}:${errorString}`);
-        pipeline.publish(_queue, `${event}:${_id}:${errorString}`);
-        pipeline.publish(`${_queue}:${_id}`, `${event}:${errorString}`);
-        pipeline.publish(`${_queue}:${_id}:${event}`, errorString);
-
-        await pipeline.exec();
-
-        if (!isRetryable) {
-          this.onError?.(job, error);
-        }
-      } finally {
-        if (dontReschedule) {
-          nextExecDate = undefined;
-        }
-
-        if (hasFailed && retry.length) {
-          nextExecDate = computeTimestampForNextRetry(runAt, retry, +count);
-        }
-
-        await this.redis.acknowledge(
-          `jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`,
-          `queues:${encodeRedisKey(queue)}`,
-          "processing",
-          "queue",
-          `blocked:${encodeRedisKey(queue)}`,
-          "blocked-queues",
-          "soft-block",
-          encodeRedisKey(id),
-          encodeRedisKey(queue),
-          nextExecDate
-        );
-        if (nextExecDate) {
-          debug(
-            `requestNextJobs(): job #${id} - acknowledged (next execution: ${nextExecDate})`
-          );
-        } else {
-          debug(`requestNextJobs(): job #${id} - acknowledged`);
-        }
+      try {
+        await this.processor(job, ackDescriptor);
+      } catch (error) {
+        await this.acknowledger.reportFailure(ackDescriptor, job, error);
       }
-    })();
-
-    this.currentlyProcessingJobs.add(currentlyProcessing);
-    if (!this.queueIsKnownToBeEmpty) {
-      this.events.emit("next");
-    }
-
-    await currentlyProcessing;
-    this.currentlyProcessingJobs.delete(currentlyProcessing);
-
-    if (!this.queueIsKnownToBeEmpty) {
-      this.events.emit("next");
-    }
-  }
+    },
+    this.maximumConcurrency
+  );
 
   public async close() {
-    this.closing = true;
-    await Promise.all(this.currentlyProcessingJobs);
+    this.distributor.close();
     await this.redis.quit();
     await this.redisSub.quit();
   }

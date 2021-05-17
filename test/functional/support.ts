@@ -1,52 +1,71 @@
-import Owl from "../../src";
+import Owl, { OwlConfig } from "../../src";
 import IORedis, { Redis } from "ioredis";
 import IORedisMock from "ioredis-mock";
 import { Producer } from "../../src/producer/producer";
 import { Activity, OnActivityEvent } from "../../src/activity/activity";
 import { Worker } from "../../src/worker/worker";
 import { Job } from "../../src/Job";
+import { AcknowledgementDescriptor } from "../../src/shared/acknowledger";
+import { Backend, delay } from "../util";
 
-export function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export function makeProducerEnv(inMemory = false) {
+export function makeProducerEnv(
+  backend: Backend,
+  config?: Partial<OwlConfig<any>>
+) {
   const env: {
     redis: Redis;
     owl: Owl<"every">;
     producer: Producer<"every">;
     setup: () => Promise<void>;
     teardown: () => Promise<void>;
+    errors: [AcknowledgementDescriptor, Error][];
   } = {
     redis: null as any,
     owl: null as any,
     producer: null as any,
     setup,
     teardown,
+    errors: [],
   };
+
+  function onError(
+    descriptor: AcknowledgementDescriptor,
+    job: Job<"every">,
+    error?: any
+  ) {
+    env.errors.push([descriptor, error]);
+  }
 
   async function setup() {
     const scheduleMap = {
       every: (lastDate: Date, meta: string) => new Date(+lastDate + +meta),
     };
-    if (inMemory) {
+    if (backend === "In-Memory") {
       env.redis = new IORedisMock();
-      env.owl = new Owl(
-        () => (env.redis as any).createConnectedClient(),
-        scheduleMap
-      );
+      env.owl = new Owl({
+        redisFactory: () => (env.redis as any).createConnectedClient(),
+        scheduleMap,
+        onError,
+        ...config,
+      });
     } else {
       env.redis = new IORedis(process.env.REDIS_URL);
       await env.redis.flushall();
 
-      env.owl = new Owl(() => new IORedis(process.env.REDIS_URL), scheduleMap);
+      env.owl = new Owl({
+        redisFactory: () => new IORedis(process.env.REDIS_URL),
+        scheduleMap,
+        onError,
+        ...config,
+      });
     }
 
     env.producer = env.owl.createProducer();
+    env.errors = [];
   }
 
   async function teardown() {
-    await env.redis?.quit();
+    env.redis.disconnect();
     await env.producer.close();
   }
 
@@ -55,20 +74,24 @@ export function makeProducerEnv(inMemory = false) {
 
 type WorkerFailPredicate = (job: Job<string>) => boolean;
 
+type JobListener = (job: Job<string>) => void;
+
 export function makeWorkerEnv(
-  inMemory = false,
+  backend: Backend,
   fail: WorkerFailPredicate = (job: Job<string>) => false
 ) {
-  const producerEnv = makeProducerEnv(inMemory);
+  const producerEnv = makeProducerEnv(backend);
 
   const producerSetup = producerEnv.setup;
   const producerTeardown = producerEnv.teardown;
 
   const workerEnv: typeof producerEnv & {
-    worker: Worker;
+    worker: Worker<"every">;
     jobs: [number, Job][];
-    nextExecDates: (Date | undefined)[];
+    nextExecDates: (number | undefined)[];
     errors: [Job, Error][];
+    onStartedJob(doIt: JobListener): void;
+    onFinishedJob(doIt: JobListener): void;
   } = producerEnv as any;
 
   workerEnv.worker = null as any;
@@ -76,27 +99,40 @@ export function makeWorkerEnv(
   workerEnv.errors = [];
   workerEnv.nextExecDates = [];
 
+  let onStartedListeners: JobListener[] = [];
+  workerEnv.onStartedJob = (doIt) => onStartedListeners.push(doIt);
+
+  let onFinishedListeners: JobListener[] = [];
+  workerEnv.onFinishedJob = (doIt) => onFinishedListeners.push(doIt);
+
   workerEnv.setup = async function setup() {
     await producerSetup();
 
     workerEnv.jobs = [];
+    onStartedListeners = [];
+    onFinishedListeners = [];
 
-    workerEnv.worker = producerEnv.owl.createWorker(
-      async (job, meta) => {
+    workerEnv.worker = await producerEnv.owl.createWorker(
+      async (job, ackDescriptor) => {
+        onStartedListeners.forEach((listener) => listener(job));
+
         workerEnv.jobs.push([Date.now(), job]);
-        workerEnv.nextExecDates.push(meta.nextExecDate);
+        workerEnv.nextExecDates.push(ackDescriptor.nextExecutionDate);
 
         if (job.payload.startsWith("block:")) {
           const duration = job.payload.split(":")[1];
           await delay(+duration);
+        } else {
+          await delay(1);
         }
 
         if (fail(job)) {
           throw new Error("failing!");
+        } else {
+          await workerEnv.worker.acknowledger.acknowledge(ackDescriptor);
         }
-      },
-      (job, error) => {
-        workerEnv.errors.push([job, error]);
+
+        onFinishedListeners.forEach((listener) => listener(job));
       }
     );
   };
@@ -109,8 +145,8 @@ export function makeWorkerEnv(
   return workerEnv;
 }
 
-export function makeActivityEnv(inMemory = false, fail?: WorkerFailPredicate) {
-  const workerEnv = makeWorkerEnv(inMemory, fail);
+export function makeActivityEnv(backend: Backend, fail?: WorkerFailPredicate) {
+  const workerEnv = makeWorkerEnv(backend, fail);
 
   const workerSetup = workerEnv.setup;
   const workerTeardown = workerEnv.teardown;
@@ -128,9 +164,12 @@ export function makeActivityEnv(inMemory = false, fail?: WorkerFailPredicate) {
 
     activityEnv.events = [];
 
-    activityEnv.activity = workerEnv.owl.createActivity((event) => {
+    activityEnv.activity = workerEnv.owl.createActivity("", (event) => {
       activityEnv.events.push(event);
     });
+
+    // wait for activity to actually connect
+    await delay(10);
   };
 
   activityEnv.teardown = async function teardown() {

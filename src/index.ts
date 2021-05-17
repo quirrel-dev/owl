@@ -1,7 +1,10 @@
 import { Redis } from "ioredis";
 import { Producer } from "./producer/producer";
-import { OnError, Processor, Worker } from "./worker/worker";
+import { Processor, Worker } from "./worker/worker";
 import { Activity, OnActivity, SubscriptionOptions } from "./activity/activity";
+import { OnError } from "./shared/acknowledger";
+import { migrate } from "./shared/migrator/migrator";
+import { StaleCheckerConfig } from "./shared/stale-checker";
 
 export { Job, JobEnqueue } from "./Job";
 export { Closable } from "./Closable";
@@ -11,24 +14,62 @@ export type ScheduleMap<ScheduleType extends string> = Record<
   (lastExecution: Date, scheduleMeta: string) => Date | null
 >;
 
-export default class Owl<ScheduleType extends string> {
-  constructor(
-    private readonly redisFactory: () => Redis,
-    private readonly scheduleMap: ScheduleMap<ScheduleType> = {} as any
-  ) {}
+export interface OwlConfig<ScheduleType extends string> {
+  redisFactory: () => Redis;
+  scheduleMap: ScheduleMap<ScheduleType>;
+  staleChecker?: StaleCheckerConfig;
+  onError?: OnError<ScheduleType>;
+}
 
-  public createWorker(processor: Processor, onError?: OnError) {
-    return new Worker(this.redisFactory, this.scheduleMap, processor, onError);
+export default class Owl<ScheduleType extends string> {
+  private readonly redisFactory;
+  private readonly scheduleMap: ScheduleMap<ScheduleType>;
+  private readonly staleCheckerConfig?: StaleCheckerConfig;
+  private readonly onError?;
+  constructor(config: OwlConfig<ScheduleType>) {
+    this.redisFactory = config.redisFactory;
+    this.scheduleMap = config.scheduleMap;
+    this.staleCheckerConfig = config.staleChecker;
+    this.onError = config.onError;
+  }
+
+  public async createWorker(processor: Processor<ScheduleType>) {
+    const worker = new Worker<ScheduleType>(
+      this.redisFactory,
+      this.scheduleMap,
+      processor,
+      this.onError
+    );
+
+    await worker.start();
+
+    return worker;
   }
 
   public createProducer() {
-    return new Producer<ScheduleType>(this.redisFactory);
+    return new Producer<ScheduleType>(
+      this.redisFactory,
+      this.onError,
+      this.staleCheckerConfig
+    );
   }
 
   public createActivity(
+    tenant: string,
     onEvent: OnActivity,
     options: SubscriptionOptions = {}
   ) {
-    return new Activity<ScheduleType>(this.redisFactory, onEvent, options);
+    return new Activity<ScheduleType>(
+      tenant,
+      this.redisFactory,
+      onEvent,
+      options
+    );
+  }
+
+  public async runMigrations() {
+    const client = this.redisFactory();
+    await migrate(client);
+    client.disconnect();
   }
 }

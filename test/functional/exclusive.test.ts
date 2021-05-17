@@ -1,192 +1,153 @@
 import { expect } from "chai";
-import { delay, makeActivityEnv } from "./support";
+import { OnActivityEvent } from "../../src/activity/activity";
+import { describeAcrossBackends, waitUntil } from "../util";
+import { makeActivityEnv } from "./support";
 
 function expectInOrder(numbers: number[]) {
   expect(numbers).to.not.contain(-1);
   expect(numbers).to.eql([...numbers].sort());
 }
 
-function test(backend: "Redis" | "In-Memory") {
-  describe(backend + " > Exclusive", () => {
-    const env = makeActivityEnv(backend === "In-Memory");
+describeAcrossBackends("Exclusive", (backend) => {
+  const env = makeActivityEnv(backend);
 
-    beforeEach(env.setup);
-    afterEach(env.teardown);
+  beforeEach(env.setup);
+  afterEach(env.teardown);
 
-    describe("exclusive: false", () => {
-      it("executes jobs in parallel", async () => {
-        await env.producer.enqueue({
-          id: "a",
-          payload: "abcde",
-          queue: "my-queue",
-          exclusive: false,
-        });
-        await env.producer.enqueue({
-          id: "b",
-          payload: "abcde",
-          queue: "my-queue",
-          exclusive: false,
-        });
+  function eventIndex(type: OnActivityEvent["type"], id: string) {
+    return env.events.findIndex((e) => {
+      if (e.type === "scheduled") {
+        return e.type == type && e.job.id === id;
+      }
 
-        await delay(50);
-
-        const indexOfARequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "a"
-        );
-        const indexOfBRequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "b"
-        );
-
-        const indexOfAAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "a"
-        );
-        const indexOfBAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "b"
-        );
-
-        expectInOrder([
-          indexOfARequested,
-          indexOfBRequested,
-          indexOfAAcknowledged,
-          indexOfBAcknowledged,
-        ]);
-      });
+      return e.type === type && e.id === id;
     });
+  }
 
-    describe("exclusive: true", () => {
-      it("executes jobs in serial", async () => {
-        await env.producer.enqueue({
-          id: "a",
-          payload: "abcde",
-          queue: "my-queue",
-          exclusive: true,
-        });
-        await env.producer.enqueue({
-          id: "b",
-          payload: "abcde",
-          queue: "my-queue",
-          exclusive: true,
-        });
+  async function waitUntilEvent(
+    type: OnActivityEvent["type"],
+    id: string,
+    maxWait: number = 100
+  ) {
+    await waitUntil(() => eventIndex(type, id) !== -1, maxWait);
+  }
 
-        await delay(50);
-
-        const indexOfARequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "a"
-        );
-        const indexOfBRequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "b"
-        );
-
-        const indexOfAAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "a"
-        );
-        const indexOfBAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "b"
-        );
-
-        expectInOrder([
-          indexOfARequested,
-          indexOfAAcknowledged,
-          indexOfBRequested,
-          indexOfBAcknowledged,
-        ]);
+  describe("exclusive: false", () => {
+    it("executes jobs in parallel", async () => {
+      await env.producer.enqueue({
+        tenant: "",
+        id: "a",
+        payload: "block:10",
+        queue: "my-queue",
+        exclusive: false,
       });
-    });
-
-    describe("non-exclusive followed by exclusive", () => {
-      it("executes jobs in serial", async () => {
-        await env.producer.enqueue({
-          id: "a",
-          payload: "abcde",
-          queue: "my-queue",
-          exclusive: false,
-        });
-
-        await env.producer.enqueue({
-          id: "b",
-          payload: "abcde",
-          queue: "my-queue",
-          exclusive: true,
-        });
-
-        await delay(50);
-
-        const indexOfARequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "a"
-        );
-        const indexOfBRequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "b"
-        );
-
-        const indexOfAAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "a"
-        );
-        const indexOfBAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "b"
-        );
-
-        expectInOrder([
-          indexOfARequested,
-          indexOfAAcknowledged,
-          indexOfBRequested,
-          indexOfBAcknowledged,
-        ]);
+      await env.producer.enqueue({
+        tenant: "",
+        id: "b",
+        payload: "block:10",
+        queue: "my-queue",
+        exclusive: false,
       });
-      it("does not starve", async () => {
-        await env.producer.enqueue({
-          id: "a",
-          payload: "block:50",
-          queue: "my-queue",
-          exclusive: false,
-        });
 
-        await env.producer.enqueue({
-          id: "b",
-          payload: "2",
-          queue: "my-queue",
-          exclusive: true,
-        });
+      await waitUntilEvent("acknowledged", "b");
 
-        await env.producer.enqueue({
-          id: "c",
-          payload: "2",
-          queue: "my-queue",
-          exclusive: false,
-        });
-
-        await delay(100);
-
-        const indexOfARequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "a"
-        );
-        const indexOfBRequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "b"
-        );
-        const indexOfCRequested = env.events.findIndex(
-          (e) => e.type === "requested" && e.id === "c"
-        );
-
-        const indexOfAAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "a"
-        );
-        const indexOfBAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "b"
-        );
-        const indexOfCAcknowledged = env.events.findIndex(
-          (e) => e.type === "acknowledged" && e.id === "c"
-        );
-        expectInOrder([
-          indexOfARequested,
-          indexOfAAcknowledged,
-          indexOfBRequested,
-          indexOfBAcknowledged,
-          indexOfCRequested,
-          indexOfCAcknowledged,
-        ]);
-      });
+      expectInOrder([
+        eventIndex("requested", "a"),
+        eventIndex("requested", "b"),
+        eventIndex("acknowledged", "a"),
+        eventIndex("acknowledged", "b"),
+      ]);
     });
   });
-}
 
-test("Redis");
-test("In-Memory");
+  async function expectToBeExecutedInSerial() {
+    await waitUntilEvent("acknowledged", "b");
+
+    expectInOrder([
+      eventIndex("requested", "a"),
+      eventIndex("acknowledged", "a"),
+      eventIndex("requested", "b"),
+      eventIndex("acknowledged", "b"),
+    ]);
+  }
+
+  describe("exclusive: true", () => {
+    it("executes jobs in serial", async () => {
+      await env.producer.enqueue({
+        tenant: "",
+        id: "a",
+        payload: "abcde",
+        queue: "my-queue",
+        exclusive: true,
+      });
+      await env.producer.enqueue({
+        tenant: "",
+        id: "b",
+        payload: "abcde",
+        queue: "my-queue",
+        exclusive: true,
+      });
+
+      await expectToBeExecutedInSerial();
+    });
+  });
+
+  describe("non-exclusive followed by exclusive", () => {
+    it("executes jobs in serial", async () => {
+      await env.producer.enqueue({
+        tenant: "",
+        id: "a",
+        payload: "abcde",
+        queue: "my-queue",
+        exclusive: false,
+      });
+
+      await env.producer.enqueue({
+        tenant: "",
+        id: "b",
+        payload: "abcde",
+        queue: "my-queue",
+        exclusive: true,
+      });
+
+      await expectToBeExecutedInSerial();
+    });
+
+    it("does not starve", async () => {
+      await env.producer.enqueue({
+        tenant: "",
+        id: "a",
+        payload: "block:50",
+        queue: "my-queue",
+        exclusive: false,
+      });
+
+      await env.producer.enqueue({
+        tenant: "",
+        id: "b",
+        payload: "2",
+        queue: "my-queue",
+        exclusive: true,
+      });
+
+      await env.producer.enqueue({
+        tenant: "",
+        id: "c",
+        payload: "2",
+        queue: "my-queue",
+        exclusive: false,
+      });
+
+      await waitUntilEvent("acknowledged", "c", 300);
+
+      expectInOrder([
+        eventIndex("requested", "a"),
+        eventIndex("acknowledged", "a"),
+        eventIndex("requested", "b"),
+        eventIndex("acknowledged", "b"),
+        eventIndex("requested", "c"),
+        eventIndex("acknowledged", "c"),
+      ]);
+    });
+  });
+});
