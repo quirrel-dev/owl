@@ -12,7 +12,6 @@ import { decodeRedisKey, tenantToRedisPrefix } from "../encodeRedisKey";
 import { JobDistributor } from "./job-distributor";
 import { defineLocalCommands } from "../redis-commands";
 import { scanTenants } from "../shared/scan-tenants";
-import { isRedisMock } from "../isRedisMock";
 
 declare module "ioredis" {
   interface Commands {
@@ -85,15 +84,9 @@ export class Worker<ScheduleType extends string> implements Closable {
       });
     };
 
-    if (isRedisMock(this.redisSub)) {
-      this.redisSub.on("message", (channel) => {
-        handleMessage(channel);
-      });
-    } else {
-      this.redisSub.on("pmessage", (_pattern, channel) => {
-        handleMessage(channel);
-      });
-    }
+    this.redisSub.on("pmessage", (_pattern, channel) => {
+      handleMessage(channel);
+    });
 
     await this.redisSub.psubscribe(
       "*scheduled",

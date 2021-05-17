@@ -5,7 +5,6 @@ import {
   encodeRedisKey,
   tenantToRedisPrefix,
 } from "../encodeRedisKey";
-import { isRedisMock } from "../isRedisMock";
 import { Job } from "../Job";
 import { Producer } from "../producer/producer";
 
