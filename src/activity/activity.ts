@@ -103,15 +103,9 @@ export class Activity<ScheduleType extends string> implements Closable {
     this.redis = redisFactory();
     this.producer = new Producer<ScheduleType>(redisFactory);
 
-    if (isRedisMock(this.redis)) {
-      this.redis.on("message", (channel, message) =>
-        this.handleMessage(channel, message)
-      );
-    } else {
-      this.redis.on("pmessage", (_pattern, channel, message) =>
-        this.handleMessage(channel, message)
-      );
-    }
+    this.redis.on("pmessage", (_pattern, channel, message) =>
+      this.handleMessage(channel, message)
+    );
 
     if (options.queue) {
       options.queue = encodeRedisKey(options.queue);
