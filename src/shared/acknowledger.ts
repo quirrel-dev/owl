@@ -12,7 +12,10 @@ declare module "ioredis" {
     tenantPrefix: string,
     id: string,
     queue: string,
-    timestampToRescheduleFor: number | undefined
+    count: number,
+    retryCount: number,
+    timestampToRescheduleFor: number | undefined,
+    timestampToRetryOn: number | undefined
   ];
   interface Commands {
     acknowledge(...args: AcknowledgeArgs): Promise<void>;
@@ -27,6 +30,8 @@ export interface AcknowledgementDescriptor {
   tenant: string;
   queueId: string;
   jobId: string;
+  count: number;
+  retryCount: number;
   timestampForNextRetry?: number;
   nextExecutionDate?: number;
 }
@@ -79,6 +84,9 @@ export class Acknowledger<ScheduleType extends string> {
       timestampForNextRetry,
       queueId,
       jobId,
+      count,
+      retryCount,
+      tenant,
       nextExecutionDate,
     } = descriptor;
     const isRetryable = !!timestampForNextRetry;
@@ -90,7 +98,7 @@ export class Acknowledger<ScheduleType extends string> {
     const _queueId = encodeRedisKey(queueId);
     const _jobId = encodeRedisKey(jobId);
 
-    const prefix = tenantToRedisPrefix(descriptor.tenant);
+    const prefix = tenantToRedisPrefix(tenant);
 
     pipeline.publish(prefix + event, `${_queueId}:${_jobId}:${errorString}`);
     pipeline.publish(prefix + _queueId, `${event}:${_jobId}:${errorString}`);
@@ -104,7 +112,10 @@ export class Acknowledger<ScheduleType extends string> {
       prefix,
       _jobId,
       _queueId,
-      isScheduled && options.dontReschedule ? undefined : timestampForNextRetry
+      count,
+      retryCount,
+      undefined,
+      timestampForNextRetry
     );
 
     if (!isRetryable) {
@@ -127,13 +138,16 @@ export class Acknowledger<ScheduleType extends string> {
     descriptor: AcknowledgementDescriptor,
     options: { dontReschedule?: boolean } = {}
   ) {
-    const { queueId, jobId, nextExecutionDate, tenant } = descriptor;
+    const { queueId, jobId, nextExecutionDate, tenant, timestampForNextRetry, count, retryCount } = descriptor;
 
     await this.redis.acknowledge(
       tenantToRedisPrefix(tenant),
       encodeRedisKey(jobId),
       encodeRedisKey(queueId),
-      options.dontReschedule ? undefined : nextExecutionDate
+      count,
+      retryCount,
+      nextExecutionDate,
+      timestampForNextRetry
     );
 
     if (nextExecutionDate) {

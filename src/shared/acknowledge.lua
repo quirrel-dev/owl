@@ -5,24 +5,41 @@ local tenantPrefix = KEYS[1]
 
 local jobId = ARGV[1]
 local jobQueue = ARGV[2]
-local rescheduleFor = ARGV[3]
+local count = tonumber(ARGV[3])
+local retryCount = tonumber(ARGV[4])
+local rescheduleFor = ARGV[5]
+local retryOn = ARGV[5]
 
 local jobTableJobKey = tenantPrefix .. "jobs:" .. jobQueue .. ":" .. jobId
+local instanceKey = count .. "-" .. retryCount
 
-redis.call("ZREM", tenantPrefix .. "processing", jobQueue .. ":" .. jobId)
+redis.call("ZREM", tenantPrefix .. "processing", jobQueue .. ":" .. jobId .. ":" .. instanceKey)
+redis.call("ZREM", jobTableJobKey .. ":instances", instanceKey)
 
 redis.call("PUBLISH", tenantPrefix .. jobQueue .. ":" .. jobId, "acknowledged")
 redis.call("PUBLISH", "acknowledged", tenantPrefix .. jobQueue .. ":" .. jobId)
 
-if rescheduleFor == '' then
+local newInstanceKey = ''
+local newTime
+
+if rescheduleFor ~= '' then
+  newTime = rescheduleFor
+  newInstanceKey = (count + 1) .. ":" .. 1
+end
+
+if retryOn ~= '' then
+  newTime = retryOn
+  newInstanceKey = count .. ":" .. (retryOn + 1)
+end
+
+if newInstanceKey == '' then
   redis.call("DEL", jobTableJobKey)
   redis.call("SREM", tenantPrefix .. "queues:" .. jobQueue, jobId)
+  -- potentially clean up :instances
 else
-  redis.call("ZADD", tenantPrefix .. "queue", rescheduleFor, jobQueue .. ":" .. jobId)
-
-  redis.call("HINCRBY", jobTableJobKey, "count", 1)
+  redis.call("ZADD", tenantPrefix .. "queue", newTime, jobQueue .. ":" .. jobId .. ":" .. newInstanceKey)
   
-  redis.call("PUBLISH", tenantPrefix .. jobQueue .. ":" .. jobId, "rescheduled:" .. rescheduleFor)
+  redis.call("PUBLISH", tenantPrefix .. jobQueue .. ":" .. jobId, "rescheduled:" .. newTime)
   redis.call("PUBLISH", tenantPrefix .. "rescheduled", jobQueue .. ":" .. jobId)
 end
 

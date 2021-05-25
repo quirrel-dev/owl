@@ -29,7 +29,8 @@ declare module "ioredis" {
           count: string,
           max_times: string,
           exclusive: "true" | "false",
-          retry: string | null
+          retry: string | null,
+          retryCount: string
         ]
       | null
       | -1
@@ -163,6 +164,7 @@ export class Worker<ScheduleType extends string> implements Closable {
         max_times,
         exclusive,
         retryJSON,
+        retryCount
       ] = result;
       const schedule_type = _schedule_type as ScheduleType | undefined;
       const queue = decodeRedisKey(_queue);
@@ -202,6 +204,8 @@ export class Worker<ScheduleType extends string> implements Closable {
         tenant,
         jobId: job.id,
         queueId: job.queue,
+        count: +count,
+        retryCount: +retryCount,
         timestampForNextRetry: computeTimestampForNextRetry(
           runAt,
           retry,

@@ -9,7 +9,12 @@ local newRunAt = ARGV[3]
 local FOUND_AND_INVOKED = 0
 local NOT_FOUND = 1
 
-local updatedJobs = redis.call("ZADD", tenantPrefix .. "queue", "XX", "CH", newRunAt, jobQueue .. ":" .. jobId)
+local mostRecentInstance = redis.call("ZRANGE", tenantPrefix .. jobQueue .. ":" .. jobId .. ":instances", -1, -1)
+if #mostRecentInstance == 0 then
+  return NOT_FOUND
+end
+
+local updatedJobs = redis.call("ZADD", tenantPrefix .. "queue", "XX", "CH", newRunAt, jobQueue .. ":" .. jobId .. ":" .. mostRecentInstance[1])
 
 if updatedJobs == 0 then
   return NOT_FOUND

@@ -25,6 +25,9 @@ if not override then
 end
 
 local count = 1
+local try = 1
+
+local instanceKey = count .. "-" .. try
 
 redis.call(
   "HSET", jobTableJobKey,
@@ -32,16 +35,17 @@ redis.call(
     "schedule_type", scheduleType,
     "schedule_meta", scheduleMeta,
     "max_times", maximumExecutionTimes,
-    "count", count,
+    "count", count, -- deprecated
     "exclusive", exclusive,
     "retry", retryIntervals
 )
 
 redis.call("SADD", tenantPrefix .. "queues:" .. jobQueue, jobId)
 
-redis.call("ZADD", tenantPrefix .. "queue", scheduledExecutionDate, jobQueue .. ":" .. jobId)
+redis.call("ZADD", jobTableJobKey .. ":instances", 0, instanceKey)
+redis.call("ZADD", tenantPrefix .. "queue", scheduledExecutionDate, jobQueue .. ":" .. jobId .. ":" .. instanceKey)
 
-redis.call("PUBLISH", tenantPrefix .. jobQueue .. ":" .. jobId, "scheduled" .. ":" .. scheduledExecutionDate .. ":" .. scheduleType .. ":" .. scheduleMeta .. ":" .. maximumExecutionTimes .. ":" .. exclusive .. ":" .. count .. ":" .. retryIntervals .. ":" .. payload)
-redis.call("PUBLISH", tenantPrefix .. "scheduled", jobQueue .. ":" .. jobId)
+redis.call("PUBLISH", tenantPrefix .. jobQueue .. ":" .. jobId, "scheduled" .. ":" .. scheduledExecutionDate .. ":" .. scheduleType .. ":" .. scheduleMeta .. ":" .. maximumExecutionTimes .. ":" .. exclusive .. ":" .. instanceKey .. ":" .. retryIntervals .. ":" .. payload)
+redis.call("PUBLISH", tenantPrefix .. "scheduled", jobQueue .. ":" .. jobId .. ":" .. instanceKey)
 
 return SCHEDULED
