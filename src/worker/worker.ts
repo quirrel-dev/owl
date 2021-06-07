@@ -13,7 +13,7 @@ import { JobDistributor } from "./job-distributor";
 import { defineLocalCommands } from "../redis-commands";
 import { scanTenants } from "../shared/scan-tenants";
 import * as tracer from "../shared/tracer";
-import opentracing from "opentracing";
+import opentracing, { Span } from "opentracing";
 
 declare module "ioredis" {
   interface Commands {
@@ -42,7 +42,8 @@ declare module "ioredis" {
 
 export type Processor<ScheduleType extends string> = (
   job: Readonly<Job<ScheduleType>>,
-  ackDescriptor: AcknowledgementDescriptor
+  ackDescriptor: AcknowledgementDescriptor,
+  span: Span
 ) => Promise<void>;
 
 function parseTenantFromChannel(topic: string) {
@@ -223,7 +224,7 @@ export class Worker<ScheduleType extends string> implements Closable {
       };
 
       try {
-        await this.processor(job, ackDescriptor);
+        await this.processor(job, ackDescriptor, span);
         span.setTag("result", "success");
       } catch (error) {
         span.setTag(opentracing.Tags.ERROR, true);
