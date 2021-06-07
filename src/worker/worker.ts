@@ -13,7 +13,7 @@ import { JobDistributor } from "./job-distributor";
 import { defineLocalCommands } from "../redis-commands";
 import { scanTenants } from "../shared/scan-tenants";
 import * as tracer from "../shared/tracer";
-import opentracing, { Span } from "opentracing";
+import * as opentracing from "opentracing";
 
 declare module "ioredis" {
   interface Commands {
@@ -43,7 +43,7 @@ declare module "ioredis" {
 export type Processor<ScheduleType extends string> = (
   job: Readonly<Job<ScheduleType>>,
   ackDescriptor: AcknowledgementDescriptor,
-  span: Span
+  span: opentracing.Span
 ) => Promise<void>;
 
 function parseTenantFromChannel(topic: string) {
