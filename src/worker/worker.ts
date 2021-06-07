@@ -12,6 +12,8 @@ import { decodeRedisKey, tenantToRedisPrefix } from "../encodeRedisKey";
 import { JobDistributor } from "./job-distributor";
 import { defineLocalCommands } from "../redis-commands";
 import { scanTenants } from "../shared/scan-tenants";
+import * as tracer from "../shared/tracer";
+import opentracing from "opentracing";
 
 declare module "ioredis" {
   interface Commands {
@@ -120,17 +122,19 @@ export class Worker<ScheduleType extends string> implements Closable {
 
   private readonly distributor = new JobDistributor(
     () => scanTenants(this.redis),
-    async (tenant) => {
+    tracer.wrap("peek-queue", (span) => async (tenant) => {
       const result = await this.redis.request(
         tenantToRedisPrefix(tenant),
         Date.now()
       );
 
       if (!result) {
+        span.setTag("result", "empty");
         return ["empty"];
       }
 
       if (result === -1) {
+        span.setTag("result", "retry");
         return ["retry"];
       }
 
@@ -138,8 +142,11 @@ export class Worker<ScheduleType extends string> implements Closable {
         const timerMaxLimit = 2147483647;
         const timeout = result - Date.now();
         if (timeout > timerMaxLimit) {
+          span.setTag("result", "too-long");
           return ["empty"];
         } else {
+          span.setTag("result", "wait");
+          span.setTag("wait-for", timeout);
           return [
             "wait",
             new Promise((resolve) => {
@@ -150,8 +157,8 @@ export class Worker<ScheduleType extends string> implements Closable {
       }
 
       return ["success", result];
-    },
-    async (result, tenant) => {
+    }),
+    tracer.wrap("run-job", (span) => async (result, tenant) => {
       const [
         _queue,
         _id,
@@ -188,6 +195,11 @@ export class Worker<ScheduleType extends string> implements Closable {
         retry,
       };
 
+      span.addTags({
+        ...job,
+        payload: undefined,
+      });
+
       let nextExecutionDate: number | undefined = undefined;
 
       if (max_times === "" || +count < +max_times) {
@@ -212,10 +224,13 @@ export class Worker<ScheduleType extends string> implements Closable {
 
       try {
         await this.processor(job, ackDescriptor);
+        span.setTag("result", "success");
       } catch (error) {
+        span.setTag(opentracing.Tags.ERROR, true);
+        tracer.logError(span, error);
         await this.acknowledger.reportFailure(ackDescriptor, job, error);
       }
-    },
+    }),
     this.maximumConcurrency
   );
 
