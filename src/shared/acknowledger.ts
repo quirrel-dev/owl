@@ -1,5 +1,6 @@
 import createDebug from "debug";
 import { Pipeline, Redis } from "ioredis";
+import { Span } from "opentracing";
 import { encodeRedisKey, tenantToRedisPrefix } from "../encodeRedisKey";
 import { Job } from "../Job";
 import { Producer } from "../producer/producer";
@@ -75,12 +76,8 @@ export class Acknowledger<ScheduleType extends string> {
       }
     }
 
-    const {
-      timestampForNextRetry,
-      queueId,
-      jobId,
-      nextExecutionDate,
-    } = descriptor;
+    const { timestampForNextRetry, queueId, jobId, nextExecutionDate } =
+      descriptor;
     const isRetryable = !!timestampForNextRetry;
     const event = isRetryable ? "retry" : "fail";
     const isScheduled = !!nextExecutionDate;
@@ -125,9 +122,16 @@ export class Acknowledger<ScheduleType extends string> {
 
   public async acknowledge(
     descriptor: AcknowledgementDescriptor,
-    options: { dontReschedule?: boolean } = {}
+    options: { dontReschedule?: boolean } = {},
+    parentSpan?: Span
   ) {
     const { queueId, jobId, nextExecutionDate, tenant } = descriptor;
+
+    const span = parentSpan
+      ?.tracer()
+      .startSpan("acknowledge", { childOf: parentSpan });
+    span?.addTags(descriptor);
+    span?.addTags(options);
 
     await this.redis.acknowledge(
       tenantToRedisPrefix(tenant),
@@ -135,6 +139,8 @@ export class Acknowledger<ScheduleType extends string> {
       encodeRedisKey(queueId),
       options.dontReschedule ? undefined : nextExecutionDate
     );
+
+    span?.finish();
 
     if (nextExecutionDate) {
       debug(
