@@ -86,6 +86,7 @@ describe(JobDistributor.name, () => {
         log.push("work:" + job);
         blocker("work:" + job);
       },
+      undefined,
       3
     );
 
