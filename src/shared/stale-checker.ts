@@ -1,4 +1,5 @@
 import type { Redis } from "ioredis";
+import type { Logger } from "pino";
 import { Closable } from "../Closable";
 import { tenantToRedisPrefix } from "../encodeRedisKey";
 import type { Producer } from "../producer/producer";
@@ -22,7 +23,8 @@ export class StaleChecker<ScheduleType extends string> implements Closable {
     private readonly redis: Redis,
     private readonly acknowledger: Acknowledger<ScheduleType>,
     private readonly producer: Producer<ScheduleType>,
-    config: StaleCheckerConfig = {}
+    config: StaleCheckerConfig = {},
+    private readonly logger?: Logger
   ) {
     this.staleAfter = config.staleAfter ?? 60 * oneMinute;
 
@@ -74,9 +76,12 @@ export class StaleChecker<ScheduleType extends string> implements Closable {
   }
 
   public async check() {
+    this.logger?.trace("Stale-Checker: Starting.");
     for await (const tenants of scanTenantsForProcessing(this.redis)) {
       await Promise.all(
         tenants.map(async (tenant) => {
+          this.logger?.trace({ tenant }, "Stale-Checker: Starting for tenant.");
+
           const staleJobDescriptors = await this.zremrangebyscoreandreturn(
             tenantToRedisPrefix(tenant) + "processing",
             "-inf",
@@ -84,8 +89,17 @@ export class StaleChecker<ScheduleType extends string> implements Closable {
           );
 
           if (staleJobDescriptors.length === 0) {
+            this.logger?.trace(
+              { tenant },
+              "Stale-Checker: No stale jobs found."
+            );
             return;
           }
+
+          this.logger?.trace(
+            { staleJobDescriptors, tenant },
+            "Stale-Checker: Found stale jobs."
+          );
 
           const staleJobs = await this.producer.findJobs(
             tenant,
@@ -98,7 +112,10 @@ export class StaleChecker<ScheduleType extends string> implements Closable {
 
           for (const job of staleJobs) {
             if (!job) {
-              console.error(new Error("Expected job to still exist"));
+              this.logger?.error(
+                { tenant },
+                "Stale-Checker: Expected job to still exist"
+              );
               continue;
             }
 
@@ -106,6 +123,11 @@ export class StaleChecker<ScheduleType extends string> implements Closable {
               job.runAt,
               job.retry,
               job.count
+            );
+
+            this.logger?.trace(
+              { tenant, job },
+              "Stale-Checker: Adding Failure report to pipeline"
             );
 
             await this.acknowledger._reportFailure(
@@ -121,7 +143,15 @@ export class StaleChecker<ScheduleType extends string> implements Closable {
             );
           }
 
+          this.logger?.trace(
+            { tenant },
+            "Stale-Checker: Starting pipeline execution"
+          );
           await pipeline.exec();
+          this.logger?.trace(
+            { tenant },
+            "Stale-Checker: Pipeline execution successful"
+          );
         })
       );
     }

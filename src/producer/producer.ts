@@ -1,7 +1,6 @@
 import { Redis } from "ioredis";
 import { Closable } from "../Closable";
 import { Job, JobEnqueue } from "../Job";
-import createDebug from "debug";
 import { Acknowledger, OnError } from "../shared/acknowledger";
 import { StaleChecker, StaleCheckerConfig } from "../shared/stale-checker";
 import {
@@ -10,8 +9,7 @@ import {
   tenantToRedisPrefix,
 } from "../encodeRedisKey";
 import { defineLocalCommands } from "../redis-commands";
-
-const debug = createDebug("owl:producer");
+import type { Logger } from "pino";
 
 declare module "ioredis" {
   interface Commands {
@@ -49,25 +47,32 @@ export class Producer<ScheduleType extends string> implements Closable {
   constructor(
     redisFactory: () => Redis,
     onError?: OnError<ScheduleType>,
-    staleCheckerConfig?: StaleCheckerConfig
+    staleCheckerConfig?: StaleCheckerConfig,
+    private readonly logger?: Logger
   ) {
     this.redis = redisFactory();
 
     defineLocalCommands(this.redis, __dirname);
 
-    this.acknowledger = new Acknowledger<ScheduleType>(this.redis, this, onError);
+    this.acknowledger = new Acknowledger<ScheduleType>(
+      this.redis,
+      this,
+      onError,
+      this.logger
+    );
     this.staleChecker = new StaleChecker(
       this.redis,
       this.acknowledger,
       this,
-      staleCheckerConfig
+      staleCheckerConfig,
+      this.logger
     );
   }
 
   public async enqueue(
     job: JobEnqueue<ScheduleType>
   ): Promise<Job<ScheduleType>> {
-    debug("job #%o: enqueueing", job.id);
+    this.logger?.debug({ job }, "Producer: Enqueueing");
 
     if (typeof job.runAt === "undefined") {
       job.runAt = new Date();
@@ -92,7 +97,7 @@ export class Producer<ScheduleType extends string> implements Closable {
       job.exclusive ?? false,
       JSON.stringify(retry)
     );
-    debug("job #%o: enqueued", job.id);
+    this.logger?.debug({ job }, "Producer: Enqueued");
 
     return {
       tenant: job.tenant,

@@ -14,6 +14,7 @@ import { defineLocalCommands } from "../redis-commands";
 import { scanTenants } from "../shared/scan-tenants";
 import * as tracer from "../shared/tracer";
 import * as opentracing from "opentracing";
+import type { Logger } from "pino";
 
 declare module "ioredis" {
   interface Commands {
@@ -65,12 +66,18 @@ export class Worker<ScheduleType extends string> implements Closable {
     private readonly scheduleMap: ScheduleMap<ScheduleType>,
     private readonly processor: Processor<ScheduleType>,
     onError?: OnError<ScheduleType>,
+    private readonly logger?: Logger,
     private readonly maximumConcurrency = 100
   ) {
     this.redis = redisFactory();
     this.redisSub = redisFactory();
 
-    this.acknowledger = new Acknowledger(this.redis, null as any, onError);
+    this.acknowledger = new Acknowledger(
+      this.redis,
+      null as any,
+      onError,
+      this.logger
+    );
 
     defineLocalCommands(this.redis, __dirname);
   }
@@ -83,6 +90,7 @@ export class Worker<ScheduleType extends string> implements Closable {
   private async listenForPubs() {
     const handleMessage = (channel: string) => {
       setImmediate(() => {
+        this.logger?.trace({ channel }, "received pub/sub message");
         this.distributor.checkForNewJobs(parseTenantFromChannel(channel));
       });
     };
@@ -124,6 +132,7 @@ export class Worker<ScheduleType extends string> implements Closable {
   private readonly distributor = new JobDistributor(
     () => scanTenants(this.redis),
     tracer.wrap("peek-queue", (span) => async (tenant) => {
+      this.logger?.trace({ tenant }, "Peeking into queue");
       const result = await this.redis.request(
         tenantToRedisPrefix(tenant),
         Date.now()
@@ -223,15 +232,19 @@ export class Worker<ScheduleType extends string> implements Closable {
         nextExecutionDate,
       };
 
+      this.logger?.trace({ job, ackDescriptor }, "Worker: Starting execution");
+
       try {
         await this.processor(job, ackDescriptor, span);
         span.setTag("result", "success");
+        this.logger?.trace({ job, ackDescriptor }, "Worker: Finished execution");
       } catch (error) {
-        span.setTag(opentracing.Tags.ERROR, true);
         tracer.logError(span, error);
+        this.logger?.trace({ job, ackDescriptor }, "Worker: Execution errored");
         await this.acknowledger.reportFailure(ackDescriptor, job, error);
       }
     }),
+    this.logger,
     this.maximumConcurrency
   );
 

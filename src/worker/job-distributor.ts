@@ -1,3 +1,4 @@
+import { Logger } from "pino";
 import { Closable } from "../Closable";
 
 export class JobDistributor<T> implements Closable {
@@ -21,6 +22,7 @@ export class JobDistributor<T> implements Closable {
       ["empty"] | ["retry"] | ["success", T] | ["wait", Promise<void>]
     >,
     private readonly run: (job: T, tenant: string) => Promise<void>,
+    private readonly logger?: Logger,
     public readonly maxJobs: number = 100,
     private readonly autoCheckEvery: number = 1000
   ) {}
@@ -37,8 +39,11 @@ export class JobDistributor<T> implements Closable {
     this.jobs.add(job);
 
     try {
+      this.logger?.trace({ job }, "Distributor: Starting work on job");
       await this.run(job, tenant);
+      this.logger?.trace({ job }, "Distributor: Finished work on job");
     } catch (e) {
+      this.logger?.error(e);
       console.error(e);
     }
 
@@ -69,10 +74,12 @@ export class JobDistributor<T> implements Closable {
   }
 
   public async checkForNewJobs(tenant: string) {
+    this.logger?.trace({ tenant }, "Checking for jobs");
     this.delayAutoCheck(tenant);
 
     while (!this.isPacked) {
       const result = await this.fetch(tenant);
+      this.logger?.trace({ tenant, result }, "Checking for jobs finished");
       switch (result[0]) {
         case "empty": {
           return;
