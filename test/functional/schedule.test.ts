@@ -55,7 +55,7 @@ describeAcrossBackends("Schedule", (backend) => {
       });
 
       describe("when failing", () => {
-        it.only("gets rescheduled", async () => {
+        it("gets rescheduled", async () => {
           await env.producer.enqueue({
             tenant: "",
             queue: "scheduled-eternity",
