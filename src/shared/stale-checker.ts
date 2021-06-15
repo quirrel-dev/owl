@@ -1,11 +1,26 @@
 import type { Redis } from "ioredis";
 import type { Logger } from "pino";
+import { ScheduleMap } from "..";
 import { Closable } from "../Closable";
 import { tenantToRedisPrefix } from "../encodeRedisKey";
 import type { Producer } from "../producer/producer";
 import { computeTimestampForNextRetry } from "../worker/retry";
+import { getNextExecutionDate } from "../worker/worker";
 import type { Acknowledger } from "./acknowledger";
 import { scanTenantsForProcessing } from "./scan-tenants";
+
+function valueAndScoreToObj(arr: (string | number)[]) {
+  const result: { value: string; score: number }[] = [];
+
+  for (let i = 0; i < arr.length; i += 2) {
+    result.push({
+      value: String(arr[i]),
+      score: Number(arr[i + 1]),
+    });
+  }
+
+  return result;
+}
 
 const oneMinute = 60 * 1000;
 
@@ -23,6 +38,7 @@ export class StaleChecker<ScheduleType extends string> implements Closable {
     private readonly redis: Redis,
     private readonly acknowledger: Acknowledger<ScheduleType>,
     private readonly producer: Producer<ScheduleType>,
+    private readonly scheduleMap: ScheduleMap<ScheduleType>,
     config: StaleCheckerConfig = {},
     private readonly logger?: Logger
   ) {
@@ -53,7 +69,7 @@ export class StaleChecker<ScheduleType extends string> implements Closable {
   ) {
     const result = await this.redis
       .pipeline()
-      .zrangebyscore(key, min, max)
+      .zrangebyscore(key, min, max, "WITHSCORES")
       .zremrangebyscore(key, min, max)
       .exec();
 
@@ -67,7 +83,7 @@ export class StaleChecker<ScheduleType extends string> implements Closable {
       throw remRangeByScoreResult[0];
     }
 
-    return rangeByScoreResult[1] as string[];
+    return valueAndScoreToObj(rangeByScoreResult[1]);
   }
 
   private parseJobDescriptor(descriptor: string) {
@@ -103,14 +119,18 @@ export class StaleChecker<ScheduleType extends string> implements Closable {
 
           const staleJobs = await this.producer.findJobs(
             tenant,
-            staleJobDescriptors.map(this.parseJobDescriptor)
+            staleJobDescriptors.map(({ value }) =>
+              this.parseJobDescriptor(value)
+            )
           );
 
           const pipeline = this.redis.pipeline();
 
           const error = "Job Timed Out";
 
-          for (const job of staleJobs) {
+          for (let i = 0; i < staleJobs.length; i++) {
+            const job = staleJobs[0];
+            const score = staleJobDescriptors[0].score;
             if (!job) {
               this.logger?.error(
                 { tenant },
@@ -125,6 +145,18 @@ export class StaleChecker<ScheduleType extends string> implements Closable {
               job.count
             );
 
+            // TODO: duplicated logic in producer, please extract
+            let nextExecutionDate: number | undefined = undefined;
+
+            if (!job.schedule?.times || job.count < job.schedule?.times) {
+              nextExecutionDate = getNextExecutionDate(
+                this.scheduleMap,
+                job.schedule?.type,
+                job.schedule?.meta ?? "",
+                new Date(score)
+              );
+            }
+
             this.logger?.trace(
               { tenant, job },
               "Stale-Checker: Adding Failure report to pipeline"
@@ -136,6 +168,7 @@ export class StaleChecker<ScheduleType extends string> implements Closable {
                 queueId: job.queue,
                 jobId: job.id,
                 timestampForNextRetry,
+                nextExecutionDate,
               },
               job,
               error,

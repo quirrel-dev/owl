@@ -54,6 +54,7 @@ export default class Owl<ScheduleType extends string> {
   public createProducer() {
     return new Producer<ScheduleType>(
       this.redisFactory,
+      this.scheduleMap,
       this.onError,
       this.staleCheckerConfig,
       this.logger

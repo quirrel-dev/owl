@@ -47,6 +47,7 @@ describeAcrossBackends("stale-check", (backend) => {
           jobId: "stalling-job",
           queueId: "stally-stall",
           timestampForNextRetry: undefined,
+          nextExecutionDate: undefined,
         },
         "Job Timed Out",
       ],
@@ -104,5 +105,32 @@ describeAcrossBackends("stale-check", (backend) => {
 
     await env.producer.staleChecker.check();
     expect(env.errors).to.deep.equal([]);
+  });
+
+  describe("when a schedule jobs goes stale", () => {
+    it("is re-scheduled", async () => {
+      worker = await env.owl.createWorker(async (job, ack) => {
+        // let job be stale
+      });
+
+      await env.producer.enqueue({
+        tenant: "",
+        id: "@cron",
+        payload: "null",
+        queue: "cron-job",
+        schedule: {
+          type: "every",
+          meta: "1000",
+        },
+      });
+
+      await delay(200);
+
+      await env.producer.staleChecker.check();
+
+      const job = await env.producer.findById("", "cron-job", "@cron");
+      expect(job).not.to.be.null;
+      expect(+job.runAt).to.be.greaterThan(Date.now());
+    });
   });
 });

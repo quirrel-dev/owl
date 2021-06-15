@@ -55,6 +55,29 @@ function parseTenantFromChannel(topic: string) {
   return "";
 }
 
+export function getNextExecutionDate<ScheduleType extends string>(
+  scheduleMap: ScheduleMap<ScheduleType>,
+  schedule_type: ScheduleType | undefined,
+  schedule_meta: string,
+  lastExecution: Date
+): number | undefined {
+  if (!schedule_type) {
+    return undefined;
+  }
+
+  const scheduleFunc = scheduleMap[schedule_type];
+  if (!scheduleFunc) {
+    throw new Error(`Schedule ${schedule_type} not found.`);
+  }
+
+  const result = scheduleFunc(lastExecution, schedule_meta);
+  if (!result) {
+    return undefined;
+  }
+
+  return +result;
+}
+
 export class Worker<ScheduleType extends string> implements Closable {
   private readonly redis;
   private readonly redisSub;
@@ -112,21 +135,12 @@ export class Worker<ScheduleType extends string> implements Closable {
     schedule_meta: string,
     lastExecution: Date
   ): number | undefined {
-    if (!schedule_type) {
-      return undefined;
-    }
-
-    const scheduleFunc = this.scheduleMap[schedule_type];
-    if (!scheduleFunc) {
-      throw new Error(`Schedule ${schedule_type} not found.`);
-    }
-
-    const result = scheduleFunc(lastExecution, schedule_meta);
-    if (!result) {
-      return undefined;
-    }
-
-    return +result;
+    return getNextExecutionDate(
+      this.scheduleMap,
+      schedule_type,
+      schedule_meta,
+      lastExecution
+    );
   }
 
   private readonly distributor = new JobDistributor(
