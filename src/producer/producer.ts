@@ -10,6 +10,7 @@ import {
 } from "../encodeRedisKey";
 import { defineLocalCommands } from "../redis-commands";
 import type { Logger } from "pino";
+import { ScheduleMap } from "..";
 
 declare module "ioredis" {
   interface Commands {
@@ -46,6 +47,7 @@ export class Producer<ScheduleType extends string> implements Closable {
 
   constructor(
     redisFactory: () => Redis,
+    scheduleMap: ScheduleMap<ScheduleType>,
     onError?: OnError<ScheduleType>,
     staleCheckerConfig?: StaleCheckerConfig,
     private readonly logger?: Logger
@@ -64,6 +66,7 @@ export class Producer<ScheduleType extends string> implements Closable {
       this.redis,
       this.acknowledger,
       this,
+      scheduleMap,
       staleCheckerConfig,
       this.logger
     );

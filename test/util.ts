@@ -7,13 +7,17 @@ export function describeAcrossBackends(
   runTests: (backend: Backend) => void
 ) {
   describe(topic, () => {
-    describe("Redis", () => {
-      runTests("Redis");
-    });
+    if (process.env.TEST_BACKEND !== "In-Memory") {
+      describe("Redis", () => {
+        runTests("Redis");
+      });
+    }
 
-    describe("In-Memory", () => {
-      runTests("In-Memory");
-    });
+    if (process.env.TEST_BACKEND !== "Redis") {
+      describe("In-Memory", () => {
+        runTests("In-Memory");
+      });
+    }
   });
 }
 
