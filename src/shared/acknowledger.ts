@@ -84,9 +84,14 @@ export class Acknowledger<ScheduleType extends string> {
 
     const { timestampForNextRetry, queueId, jobId, nextExecutionDate } =
       descriptor;
+
+    let timestampToRescheduleFor = timestampForNextRetry ?? nextExecutionDate;
+    if (options.dontReschedule) {
+      timestampToRescheduleFor = undefined;
+    }
+
     const isRetryable = !!timestampForNextRetry;
     const event = isRetryable ? "retry" : "fail";
-    const isScheduled = !!nextExecutionDate;
 
     const errorString = encodeURIComponent(error);
 
@@ -103,12 +108,9 @@ export class Acknowledger<ScheduleType extends string> {
     );
     pipeline.publish(prefix + `${_queueId}:${_jobId}:${event}`, errorString);
 
-    const rescheduleFor =
-      isScheduled && options.dontReschedule ? undefined : timestampForNextRetry;
-
-    pipeline.acknowledge(prefix, _jobId, _queueId, rescheduleFor);
+    pipeline.acknowledge(prefix, _jobId, _queueId, timestampToRescheduleFor);
     this.logger?.trace(
-      { descriptor, rescheduleFor },
+      { descriptor, timestampToRescheduleFor },
       "Acknowledger: Job will be reported as failure."
     );
 

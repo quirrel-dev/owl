@@ -127,7 +127,11 @@ export function makeWorkerEnv(
         }
 
         if (fail(job)) {
-          throw new Error("failing!");
+          await workerEnv.worker.acknowledger.reportFailure(
+            ackDescriptor,
+            job,
+            job.payload
+          );
         } else {
           await workerEnv.worker.acknowledger.acknowledge(ackDescriptor);
         }

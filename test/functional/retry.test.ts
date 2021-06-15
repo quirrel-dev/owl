@@ -1,7 +1,6 @@
 import { expect } from "chai";
 import { makeActivityEnv } from "./support";
-import { delay, describeAcrossBackends, makeSignal, waitUntil } from "../util";
-import { worker } from "node:cluster";
+import { describeAcrossBackends, makeSignal, waitUntil } from "../util";
 
 describeAcrossBackends("Retry", (backend) => {
   const env = makeActivityEnv(backend, (job) => {
@@ -9,7 +8,8 @@ describeAcrossBackends("Retry", (backend) => {
       return false;
     }
 
-    return true;
+
+    throw new Error("failing!");
   });
 
   beforeEach(env.setup);
