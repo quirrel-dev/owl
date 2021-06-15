@@ -100,7 +100,7 @@ export class Activity<ScheduleType extends string> implements Closable {
     options: SubscriptionOptions = {}
   ) {
     this.redis = redisFactory();
-    this.producer = new Producer<ScheduleType>(redisFactory);
+    this.producer = new Producer<ScheduleType>(redisFactory, null as any);
 
     this.redis.on("pmessage", (_pattern, channel, message) =>
       this.handleMessage(channel, message)
