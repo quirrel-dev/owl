@@ -5,6 +5,7 @@ import { Activity, OnActivity, SubscriptionOptions } from "./activity/activity";
 import { OnError } from "./shared/acknowledger";
 import { migrate } from "./shared/migrator/migrator";
 import { StaleCheckerConfig } from "./shared/stale-checker";
+import type { Logger } from "pino";
 
 export { Job, JobEnqueue } from "./Job";
 export { Closable } from "./Closable";
@@ -19,6 +20,7 @@ export interface OwlConfig<ScheduleType extends string> {
   scheduleMap: ScheduleMap<ScheduleType>;
   staleChecker?: StaleCheckerConfig;
   onError?: OnError<ScheduleType>;
+  logger?: Logger;
 }
 
 export default class Owl<ScheduleType extends string> {
@@ -26,11 +28,13 @@ export default class Owl<ScheduleType extends string> {
   private readonly scheduleMap: ScheduleMap<ScheduleType>;
   private readonly staleCheckerConfig?: StaleCheckerConfig;
   private readonly onError?;
+  private readonly logger?;
   constructor(config: OwlConfig<ScheduleType>) {
     this.redisFactory = config.redisFactory;
     this.scheduleMap = config.scheduleMap;
     this.staleCheckerConfig = config.staleChecker;
     this.onError = config.onError;
+    this.logger = config.logger;
   }
 
   public async createWorker(processor: Processor<ScheduleType>) {
@@ -38,7 +42,8 @@ export default class Owl<ScheduleType extends string> {
       this.redisFactory,
       this.scheduleMap,
       processor,
-      this.onError
+      this.onError,
+      this.logger
     );
 
     await worker.start();
@@ -50,7 +55,8 @@ export default class Owl<ScheduleType extends string> {
     return new Producer<ScheduleType>(
       this.redisFactory,
       this.onError,
-      this.staleCheckerConfig
+      this.staleCheckerConfig,
+      this.logger
     );
   }
 

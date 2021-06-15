@@ -1,12 +1,10 @@
-import createDebug from "debug";
 import { Pipeline, Redis } from "ioredis";
 import { Span } from "opentracing";
+import type { Logger } from "pino";
 import { encodeRedisKey, tenantToRedisPrefix } from "../encodeRedisKey";
 import { Job } from "../Job";
 import { Producer } from "../producer/producer";
 import { defineLocalCommands } from "../redis-commands";
-
-const debug = createDebug("owl:acknowledger");
 
 declare module "ioredis" {
   type AcknowledgeArgs = [
@@ -42,7 +40,8 @@ export class Acknowledger<ScheduleType extends string> {
   constructor(
     private readonly redis: Redis,
     private readonly producer: Producer<ScheduleType>,
-    private readonly onError?: OnError<ScheduleType>
+    private readonly onError?: OnError<ScheduleType>,
+    private readonly logger?: Logger
   ) {
     defineLocalCommands(this.redis, __dirname);
   }
@@ -54,6 +53,10 @@ export class Acknowledger<ScheduleType extends string> {
     pipeline: Pipeline,
     options: { dontReschedule?: boolean } = {}
   ) {
+    this.logger?.trace(
+      { job, descriptor, options },
+      "Acknowledger: Starting to report failure"
+    );
     if (!job) {
       job = await this.producer.findById(
         descriptor.tenant,
@@ -62,7 +65,10 @@ export class Acknowledger<ScheduleType extends string> {
       );
 
       if (!job) {
-        console.error("Job couldn't be found, but should be here.");
+        this.logger?.error(
+          { descriptor },
+          "Acknowledger: Job couldn't be found, but should be here."
+        );
         job = {
           id: descriptor.jobId,
           queue: descriptor.queueId,
@@ -103,9 +109,18 @@ export class Acknowledger<ScheduleType extends string> {
     pipeline.publish(prefix + `${_queueId}:${_jobId}:${event}`, errorString);
 
     pipeline.acknowledge(prefix, _jobId, _queueId, timestampToRescheduleFor);
+    this.logger?.trace(
+      { descriptor, timestampToRescheduleFor },
+      "Acknowledger: Job will be reported as failure."
+    );
 
     if (!isRetryable) {
       this.onError?.(descriptor, job, error);
+
+      this.logger?.trace(
+        { descriptor },
+        "Acknowledger: Job isn't retryable, so it'll be accounted as an error."
+      );
     }
   }
 
@@ -133,6 +148,11 @@ export class Acknowledger<ScheduleType extends string> {
     span?.addTags(descriptor);
     span?.addTags(options);
 
+    this.logger?.trace(
+      { descriptor },
+      "Acknowledger: Job will be acknowledged."
+    );
+
     await this.redis.acknowledge(
       tenantToRedisPrefix(tenant),
       encodeRedisKey(jobId),
@@ -140,14 +160,11 @@ export class Acknowledger<ScheduleType extends string> {
       options.dontReschedule ? undefined : nextExecutionDate
     );
 
-    span?.finish();
+    this.logger?.trace(
+      { descriptor, options },
+      "Acknowledger: Job was acknowledged."
+    );
 
-    if (nextExecutionDate) {
-      debug(
-        `requestNextJobs(): job #${jobId} - acknowledged (next execution: ${nextExecutionDate})`
-      );
-    } else {
-      debug(`requestNextJobs(): job #${jobId} - acknowledged`);
-    }
+    span?.finish();
   }
 }
