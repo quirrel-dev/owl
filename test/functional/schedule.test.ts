@@ -3,7 +3,9 @@ import { delay, describeAcrossBackends } from "../util";
 import { makeWorkerEnv } from "./support";
 
 describeAcrossBackends("Schedule", (backend) => {
-  const env = makeWorkerEnv(backend);
+  const env = makeWorkerEnv(backend, (job) => {
+    return job.payload === "reportFailure";
+  });
 
   beforeEach(env.setup);
   afterEach(env.teardown);
@@ -50,6 +52,26 @@ describeAcrossBackends("Schedule", (backend) => {
         const lengthAfterDeletion = env.jobs.length;
 
         expect(lengthAfterDeletion - lengthBeforeDeletion).to.be.closeTo(0, 2);
+      });
+
+      describe("when failing", () => {
+        it.only("gets rescheduled", async () => {
+          await env.producer.enqueue({
+            tenant: "",
+            queue: "scheduled-eternity",
+            id: "a",
+            payload: "reportFailure",
+            schedule: {
+              type: "every",
+              meta: "10",
+            },
+          });
+
+          await delay(100);
+
+          expect(await env.producer.findById("", "scheduled-eternity", "a")).not
+            .to.be.null;
+        });
       });
     });
 
