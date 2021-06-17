@@ -171,12 +171,7 @@ export class Worker<ScheduleType extends string> implements Closable {
         } else {
           span.setTag("result", "wait");
           span.setTag("wait-for", timeout);
-          return [
-            "wait",
-            new Promise((resolve) => {
-              setTimeout(resolve, timeout);
-            }),
-          ];
+          return ["wait", timeout];
         }
       }
 
@@ -251,7 +246,10 @@ export class Worker<ScheduleType extends string> implements Closable {
       try {
         await this.processor(job, ackDescriptor, span);
         span.setTag("result", "success");
-        this.logger?.trace({ job, ackDescriptor }, "Worker: Finished execution");
+        this.logger?.trace(
+          { job, ackDescriptor },
+          "Worker: Finished execution"
+        );
       } catch (error) {
         tracer.logError(span, error);
         this.logger?.trace({ job, ackDescriptor }, "Worker: Execution errored");

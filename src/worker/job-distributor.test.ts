@@ -26,6 +26,10 @@ function tick() {
   return new Promise(setImmediate);
 }
 
+export function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 describe(JobDistributor.name, () => {
   let closables: Closable[] = [];
   afterEach(async () => {
@@ -116,7 +120,6 @@ describe(JobDistributor.name, () => {
     const log: string[] = [];
 
     let fetchCount = 0;
-    const blocker = makeBlocker();
     const distributor = new JobDistributor(
       async function* () {
         yield [""];
@@ -126,7 +129,7 @@ describe(JobDistributor.name, () => {
 
         switch (fetchCount) {
           case 1:
-            return ["wait", blocker.block("wait")];
+            return ["wait", 10];
           case 2:
             return ["success", "1"];
           default:
@@ -145,7 +148,7 @@ describe(JobDistributor.name, () => {
 
     expect(log).to.eql([]);
 
-    await blocker("wait");
+    await delay(15);
 
     expect(log).to.eql(["work:1"]);
   });
