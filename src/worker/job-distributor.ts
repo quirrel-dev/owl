@@ -18,9 +18,7 @@ export class JobDistributor<T> implements Closable {
     private readonly fetchInitialTenants: () => AsyncGenerator<string[]>,
     private readonly fetch: (
       tenant: string
-    ) => Promise<
-      ["empty"] | ["retry"] | ["success", T] | ["wait", Promise<void>]
-    >,
+    ) => Promise<["empty"] | ["retry"] | ["success", T] | ["wait", number]>,
     private readonly run: (job: T, tenant: string) => Promise<void>,
     private readonly logger?: Logger,
     public readonly maxJobs: number = 100,
@@ -56,21 +54,34 @@ export class JobDistributor<T> implements Closable {
   setTimeout: (cb: () => void, timeout: number) => NodeJS.Timeout =
     global.setTimeout;
 
-  autoCheckIds: Record<string, NodeJS.Timeout> = {};
-
   private delayAutoCheck(tenant: string) {
-    if (this.autoCheckIds[tenant]) {
-      clearTimeout(this.autoCheckIds[tenant]);
+    this.checkAgainAfter(tenant, this.autoCheckEvery);
+  }
+
+  nextChecks: Record<string, { handle: NodeJS.Timeout; time: number }> = {};
+
+  private checkAgainAfter(tenant: string, millis: number) {
+    const date = Date.now() + millis;
+    if (this.nextChecks[tenant]) {
+      const { handle, time } = this.nextChecks[tenant];
+      if (time < date) {
+        return;
+      }
+
+      clearTimeout(handle);
     }
 
     if (this.isClosed) {
       return;
     }
 
-    this.autoCheckIds[tenant] = this.setTimeout(
-      () => this.checkForNewJobs(tenant),
-      this.autoCheckEvery
-    );
+    this.nextChecks[tenant] = {
+      handle: this.setTimeout(() => {
+        delete this.nextChecks[tenant];
+        this.checkForNewJobs(tenant);
+      }, millis),
+      time: date,
+    };
   }
 
   public async checkForNewJobs(tenant: string) {
@@ -93,8 +104,8 @@ export class JobDistributor<T> implements Closable {
 
         case "wait": {
           const waitFor = result[1];
-          await waitFor;
-          continue;
+          this.checkAgainAfter(tenant, waitFor);
+          return;
         }
 
         case "retry": {
@@ -106,8 +117,8 @@ export class JobDistributor<T> implements Closable {
 
   close() {
     this.isClosed = true;
-    for (const autoCheckId of Object.values(this.autoCheckIds)) {
-      clearTimeout(autoCheckId);
+    for (const { handle } of Object.values(this.nextChecks)) {
+      clearTimeout(handle);
     }
   }
 }

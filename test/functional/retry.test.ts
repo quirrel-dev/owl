@@ -8,7 +8,6 @@ describeAcrossBackends("Retry", (backend) => {
       return false;
     }
 
-
     throw new Error("failing!");
   });
 
@@ -77,9 +76,19 @@ describeAcrossBackends("Retry", (backend) => {
 
       const executionDates = env.jobs.map(([executionDate]) => executionDate);
       expect(executionDates).to.have.length(4);
-      expect(executionDates[1] - executionDates[0]).to.be.within(5, 20);
-      expect(executionDates[2] - executionDates[0]).to.be.within(80, 120);
-      expect(executionDates[3] - executionDates[0]).to.be.within(180, 220);
+      const firstDuration = executionDates[1] - executionDates[0];
+      const secondDuration = executionDates[2] - executionDates[0];
+      const thirdDuration = executionDates[3] - executionDates[0];
+
+      if (backend === "Redis") {
+        expect(firstDuration).to.be.within(5, 25);
+        expect(secondDuration).to.be.within(80, 120);
+        expect(thirdDuration).to.be.within(180, 220);
+      } else {
+        expect(firstDuration).to.be.within(5, 50);
+        expect(secondDuration).to.be.within(50, 150);
+        expect(thirdDuration).to.be.within(150, 250);
+      }
 
       const counts = env.jobs.map(([, job]) => job.count);
       expect(counts).to.eql([1, 2, 3, 4]);
