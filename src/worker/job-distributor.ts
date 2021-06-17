@@ -76,7 +76,10 @@ export class JobDistributor<T> implements Closable {
     }
 
     this.nextChecks[tenant] = {
-      handle: this.setTimeout(() => this.checkForNewJobs(tenant), millis),
+      handle: this.setTimeout(() => {
+        delete this.nextChecks[tenant];
+        this.checkForNewJobs(tenant);
+      }, millis),
       time: date,
     };
   }
