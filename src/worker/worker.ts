@@ -111,10 +111,19 @@ export class Worker<ScheduleType extends string> implements Closable {
   }
 
   private async listenForPubs() {
+    let throttled = new Set<string>();
     const handleMessage = (channel: string) => {
+      const tenant = parseTenantFromChannel(channel);
+      if (throttled.has(tenant)) {
+        return;
+      }
+
+      throttled.add(tenant);
+
       setImmediate(() => {
-        this.logger?.trace({ channel }, "received pub/sub message");
-        this.distributor.checkForNewJobs(parseTenantFromChannel(channel));
+        throttled.delete(tenant);
+        this.logger?.trace({ tenant }, "received pub/sub message");
+        this.distributor.checkForNewJobs(tenant);
       });
     };
 
