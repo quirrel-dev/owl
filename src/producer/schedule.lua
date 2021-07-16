@@ -8,8 +8,7 @@ local scheduleType = ARGV[5]
 local scheduleMeta = ARGV[6]
 local maximumExecutionTimes = ARGV[7]
 local override = ARGV[8] == "true"
-local exclusive = ARGV[9]
-local retryIntervals = ARGV[10] -- as JSON array
+local retryIntervals = ARGV[9] -- as JSON array
 
 local SCHEDULED = 0
 local ID_ALREADY_EXISTS = 1
@@ -31,7 +30,6 @@ redis.call(
     "schedule_meta", scheduleMeta,
     "max_times", maximumExecutionTimes,
     "count", count,
-    "exclusive", exclusive,
     "retry", retryIntervals
 )
 
@@ -39,7 +37,7 @@ redis.call("SADD", "queues:" .. jobQueue, jobId)
 
 redis.call("ZADD", "queue", scheduledExecutionDate, jobQueue .. ":" .. jobId)
 
-redis.call("PUBLISH", jobQueue .. ":" .. jobId, "scheduled" .. ":" .. scheduledExecutionDate .. ":" .. scheduleType .. ":" .. scheduleMeta .. ":" .. maximumExecutionTimes .. ":" .. exclusive .. ":" .. count .. ":" .. retryIntervals .. ":" .. payload)
+redis.call("PUBLISH", jobQueue .. ":" .. jobId, "scheduled" .. ":" .. scheduledExecutionDate .. ":" .. scheduleType .. ":" .. scheduleMeta .. ":" .. maximumExecutionTimes  .. ":" .. count .. ":" .. retryIntervals .. ":" .. payload)
 redis.call("PUBLISH", "scheduled", jobQueue .. ":" .. jobId)
 
 return SCHEDULED

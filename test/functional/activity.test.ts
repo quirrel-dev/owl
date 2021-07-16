@@ -33,7 +33,6 @@ describeAcrossBackends("Activity", (backend) => {
       id: "b;wild",
       payload: "lol",
       runAt: new Date(9999999999999),
-      exclusive: true,
     });
 
     await env.producer.enqueue({
@@ -61,7 +60,7 @@ describeAcrossBackends("Activity", (backend) => {
             runAt: currentDate,
             count: 1,
             schedule: undefined,
-            exclusive: false,
+
             retry: [],
           },
         },
@@ -74,7 +73,7 @@ describeAcrossBackends("Activity", (backend) => {
             runAt: new Date(9999999999999),
             count: 1,
             schedule: undefined,
-            exclusive: true,
+
             retry: [],
           },
         },
@@ -86,7 +85,7 @@ describeAcrossBackends("Activity", (backend) => {
             payload: "lol",
             count: 1,
             runAt: currentDate,
-            exclusive: false,
+
             retry: [],
             schedule: {
               type: "every",
