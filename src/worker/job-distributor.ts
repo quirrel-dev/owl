@@ -25,9 +25,7 @@ export class JobDistributor<T> implements Closable {
   ) {}
 
   public async start() {
-    const promises: Promise<void>[] = [];
-    promises.push(this.checkForNewJobs());
-    await Promise.all(promises);
+    await this.checkForNewJobs();
   }
 
   private async workOn(job: T) {
@@ -55,25 +53,30 @@ export class JobDistributor<T> implements Closable {
     this.checkAgainAfter(this.autoCheckEvery);
   }
 
-  nextCheck: number = 0;
-  nextCheckHandle: NodeJS.Timeout | null = null;
+  nextCheck: { handle: NodeJS.Timeout; time: number } | null = null;
 
   private checkAgainAfter(millis: number) {
-    const date = Date.now() + millis;
-    if (this.nextCheckHandle && this.nextCheck < date) {
-      clearTimeout(this.nextCheckHandle);
-    }
-
     if (this.isClosed) {
       return;
     }
 
-    this.nextCheck = date;
-    this.nextCheckHandle = this.setTimeout(() => {
-      this.nextCheck = 0;
-      this.nextCheckHandle = null;
-      this.checkForNewJobs();
-    }, millis);
+    const date = Date.now() + millis;
+    const alreadyCheckingSometimeBefore =
+      this.nextCheck && this.nextCheck.time < date;
+    if (alreadyCheckingSometimeBefore) {
+      return;
+    }
+
+    if (this.nextCheck) {
+      clearTimeout(this.nextCheck.handle);
+    }
+    this.nextCheck = {
+      time: date,
+      handle: this.setTimeout(() => {
+        this.nextCheck = null;
+        this.checkForNewJobs();
+      }, millis),
+    };
   }
 
   public async checkForNewJobs() {
@@ -109,8 +112,8 @@ export class JobDistributor<T> implements Closable {
 
   close() {
     this.isClosed = true;
-    if (this.nextCheckHandle) {
-      clearTimeout(this.nextCheckHandle);
+    if (this.nextCheck) {
+      clearTimeout(this.nextCheck.handle);
     }
   }
 }
