@@ -8,10 +8,9 @@ import {
   Acknowledger,
   OnError,
 } from "../shared/acknowledger";
-import { decodeRedisKey, tenantToRedisPrefix } from "../encodeRedisKey";
+import { decodeRedisKey } from "../encodeRedisKey";
 import { JobDistributor } from "./job-distributor";
 import { defineLocalCommands } from "../redis-commands";
-import { scanTenants } from "../shared/scan-tenants";
 import * as tracer from "../shared/tracer";
 import * as opentracing from "opentracing";
 import type { Logger } from "pino";
@@ -19,7 +18,6 @@ import type { Logger } from "pino";
 declare module "ioredis" {
   interface Commands {
     request(
-      tenantPrefix: string,
       currentTimestamp: number
     ): Promise<
       | [
@@ -46,14 +44,6 @@ export type Processor<ScheduleType extends string> = (
   ackDescriptor: AcknowledgementDescriptor,
   span: opentracing.Span
 ) => Promise<void>;
-
-function parseTenantFromChannel(topic: string) {
-  if (topic.startsWith("{")) {
-    return topic.slice(1, topic.indexOf("}"));
-  }
-
-  return "";
-}
 
 export function getNextExecutionDate<ScheduleType extends string>(
   scheduleMap: ScheduleMap<ScheduleType>,
@@ -111,19 +101,18 @@ export class Worker<ScheduleType extends string> implements Closable {
   }
 
   private async listenForPubs() {
-    let throttled = new Set<string>();
+    let throttled = false;
     const handleMessage = (channel: string) => {
-      const tenant = parseTenantFromChannel(channel);
-      if (throttled.has(tenant)) {
+      if (throttled) {
         return;
       }
 
-      throttled.add(tenant);
+      throttled = true;
 
       setImmediate(() => {
-        throttled.delete(tenant);
-        this.logger?.trace({ tenant }, "received pub/sub message");
-        this.distributor.checkForNewJobs(tenant);
+        throttled = false;
+        this.logger?.trace("received pub/sub message");
+        this.distributor.checkForNewJobs("");
       });
     };
 
@@ -153,13 +142,12 @@ export class Worker<ScheduleType extends string> implements Closable {
   }
 
   private readonly distributor = new JobDistributor(
-    () => scanTenants(this.redis),
+    async function* () {
+      yield [""];
+    },
     tracer.wrap("peek-queue", (span) => async (tenant) => {
       this.logger?.trace({ tenant }, "Peeking into queue");
-      const result = await this.redis.request(
-        tenantToRedisPrefix(tenant),
-        Date.now()
-      );
+      const result = await this.redis.request(Date.now());
 
       if (!result) {
         span.setTag("result", "empty");
@@ -206,7 +194,6 @@ export class Worker<ScheduleType extends string> implements Closable {
       const retry = JSON.parse(retryJSON ?? "[]") as number[];
 
       const job: Job<ScheduleType> = {
-        tenant,
         queue,
         id,
         payload,
@@ -239,7 +226,6 @@ export class Worker<ScheduleType extends string> implements Closable {
       }
 
       const ackDescriptor: AcknowledgementDescriptor = {
-        tenant,
         jobId: job.id,
         queueId: job.queue,
         timestampForNextRetry: computeTimestampForNextRetry(

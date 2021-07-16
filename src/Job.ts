@@ -1,6 +1,4 @@
-export interface Job<ScheduleType extends string = string> {
-  tenant: string;
-  
+export interface Job<ScheduleType extends string = string> {  
   id: string;
   queue: string;
   payload: string;
@@ -20,7 +18,6 @@ export interface Job<ScheduleType extends string = string> {
 }
 
 export interface JobEnqueue<ScheduleType extends string = string> {
-  tenant: string;
   id: string;
   queue: string;
   payload: string;

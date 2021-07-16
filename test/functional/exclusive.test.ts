@@ -35,14 +35,12 @@ describeAcrossBackends("Exclusive", (backend) => {
   describe("exclusive: false", () => {
     it("executes jobs in parallel", async () => {
       await env.producer.enqueue({
-        tenant: "",
         id: "a",
         payload: "block:10",
         queue: "my-queue",
         exclusive: false,
       });
       await env.producer.enqueue({
-        tenant: "",
         id: "b",
         payload: "block:10",
         queue: "my-queue",
@@ -74,14 +72,12 @@ describeAcrossBackends("Exclusive", (backend) => {
   describe("exclusive: true", () => {
     it("executes jobs in serial", async () => {
       await env.producer.enqueue({
-        tenant: "",
         id: "a",
         payload: "abcde",
         queue: "my-queue",
         exclusive: true,
       });
       await env.producer.enqueue({
-        tenant: "",
         id: "b",
         payload: "abcde",
         queue: "my-queue",
@@ -95,7 +91,6 @@ describeAcrossBackends("Exclusive", (backend) => {
   describe("non-exclusive followed by exclusive", () => {
     it("executes jobs in serial", async () => {
       await env.producer.enqueue({
-        tenant: "",
         id: "a",
         payload: "abcde",
         queue: "my-queue",
@@ -103,7 +98,6 @@ describeAcrossBackends("Exclusive", (backend) => {
       });
 
       await env.producer.enqueue({
-        tenant: "",
         id: "b",
         payload: "abcde",
         queue: "my-queue",
@@ -115,7 +109,6 @@ describeAcrossBackends("Exclusive", (backend) => {
 
     it("does not starve", async () => {
       await env.producer.enqueue({
-        tenant: "",
         id: "a",
         payload: "block:50",
         queue: "my-queue",
@@ -123,7 +116,6 @@ describeAcrossBackends("Exclusive", (backend) => {
       });
 
       await env.producer.enqueue({
-        tenant: "",
         id: "b",
         payload: "2",
         queue: "my-queue",
@@ -131,7 +123,6 @@ describeAcrossBackends("Exclusive", (backend) => {
       });
 
       await env.producer.enqueue({
-        tenant: "",
         id: "c",
         payload: "2",
         queue: "my-queue",

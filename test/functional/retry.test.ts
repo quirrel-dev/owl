@@ -18,7 +18,6 @@ describeAcrossBackends("Retry", (backend) => {
     it("throws", async () => {
       try {
         await env.producer.enqueue({
-          tenant: "",
           queue: "scheduled-eternity",
           id: "a",
           payload: "a",
@@ -47,7 +46,6 @@ describeAcrossBackends("Retry", (backend) => {
         }
       });
       await env.producer.enqueue({
-        tenant: "",
         queue: "scheduled-eternity",
         id: "a",
         payload: "a",
@@ -100,7 +98,6 @@ describeAcrossBackends("Retry", (backend) => {
         env.onFinishedJob(finished.signal);
 
         await env.producer.enqueue({
-          tenant: "",
           queue: "scheduled-eternity",
           id: "a",
           payload: "thou shalt succeed",

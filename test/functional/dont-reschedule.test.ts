@@ -22,7 +22,6 @@ describeAcrossBackends("dontReschedule", (backend) => {
     });
 
     await producerEnv.producer.enqueue({
-      tenant: "",
       id: "a",
       queue: "q",
       payload: "p",

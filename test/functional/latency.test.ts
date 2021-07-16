@@ -26,7 +26,6 @@ describeAcrossBackends("Latency", (backend) => {
       for (let i = 0; i < 1000; i++) {
         enqueueals.push(
           env.producer.enqueue({
-            tenant: "",
             id: "" + i,
             payload: "" + Date.now(),
             queue: "latency",
