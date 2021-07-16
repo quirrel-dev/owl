@@ -15,11 +15,10 @@ export class JobDistributor<T> implements Closable {
   }
 
   constructor(
-    private readonly fetchInitialTenants: () => AsyncGenerator<string[]>,
-    private readonly fetch: (
-      tenant: string
-    ) => Promise<["empty"] | ["retry"] | ["success", T] | ["wait", number]>,
-    private readonly run: (job: T, tenant: string) => Promise<void>,
+    private readonly fetch: () => Promise<
+      ["empty"] | ["retry"] | ["success", T] | ["wait", number]
+    >,
+    private readonly run: (job: T) => Promise<void>,
     private readonly logger?: Logger,
     public readonly maxJobs: number = 100,
     private readonly autoCheckEvery: number = 1000
@@ -27,18 +26,16 @@ export class JobDistributor<T> implements Closable {
 
   public async start() {
     const promises: Promise<void>[] = [];
-    for await (const tenants of this.fetchInitialTenants()) {
-      promises.push(...tenants.map((t) => this.checkForNewJobs(t)));
-    }
+    promises.push(this.checkForNewJobs());
     await Promise.all(promises);
   }
 
-  private async workOn(job: T, tenant: string) {
+  private async workOn(job: T) {
     this.jobs.add(job);
 
     try {
       this.logger?.trace({ job }, "Distributor: Starting work on job");
-      await this.run(job, tenant);
+      await this.run(job);
       this.logger?.trace({ job }, "Distributor: Finished work on job");
     } catch (e) {
       this.logger?.error(e);
@@ -47,50 +44,45 @@ export class JobDistributor<T> implements Closable {
 
     this.jobs.delete(job);
 
-    this.checkForNewJobs(tenant);
+    this.checkForNewJobs();
   }
 
   // DI for testing
   setTimeout: (cb: () => void, timeout: number) => NodeJS.Timeout =
     global.setTimeout;
 
-  private delayAutoCheck(tenant: string) {
-    this.checkAgainAfter(tenant, this.autoCheckEvery);
+  private delayAutoCheck() {
+    this.checkAgainAfter(this.autoCheckEvery);
   }
 
-  nextChecks: Record<string, { handle: NodeJS.Timeout; time: number }> = {};
+  nextCheck: number = 0;
+  nextCheckHandle: NodeJS.Timeout | null = null;
 
-  private checkAgainAfter(tenant: string, millis: number) {
+  private checkAgainAfter(millis: number) {
     const date = Date.now() + millis;
-    if (this.nextChecks[tenant]) {
-      const { handle, time } = this.nextChecks[tenant];
-      if (time < date) {
-        return;
-      }
-
-      clearTimeout(handle);
+    if (this.nextCheckHandle && this.nextCheck < date) {
+      clearTimeout(this.nextCheckHandle);
     }
 
     if (this.isClosed) {
       return;
     }
 
-    this.nextChecks[tenant] = {
-      handle: this.setTimeout(() => {
-        delete this.nextChecks[tenant];
-        this.checkForNewJobs(tenant);
-      }, millis),
-      time: date,
-    };
+    this.nextCheck = date;
+    this.nextCheckHandle = this.setTimeout(() => {
+      this.nextCheck = 0;
+      this.nextCheckHandle = null;
+      this.checkForNewJobs();
+    }, millis);
   }
 
-  public async checkForNewJobs(tenant: string) {
-    this.logger?.trace({ tenant }, "Checking for jobs");
-    this.delayAutoCheck(tenant);
+  public async checkForNewJobs() {
+    this.logger?.trace("Checking for jobs");
+    this.delayAutoCheck();
 
     while (!this.isPacked) {
-      const result = await this.fetch(tenant);
-      this.logger?.trace({ tenant, result }, "Checking for jobs finished");
+      const result = await this.fetch();
+      this.logger?.trace({ result }, "Checking for jobs finished");
       switch (result[0]) {
         case "empty": {
           return;
@@ -98,13 +90,13 @@ export class JobDistributor<T> implements Closable {
 
         case "success": {
           const job = result[1];
-          this.workOn(job, tenant);
+          this.workOn(job);
           continue;
         }
 
         case "wait": {
           const waitFor = result[1];
-          this.checkAgainAfter(tenant, waitFor);
+          this.checkAgainAfter(waitFor);
           return;
         }
 
@@ -117,8 +109,8 @@ export class JobDistributor<T> implements Closable {
 
   close() {
     this.isClosed = true;
-    for (const { handle } of Object.values(this.nextChecks)) {
-      clearTimeout(handle);
+    if (this.nextCheckHandle) {
+      clearTimeout(this.nextCheckHandle);
     }
   }
 }

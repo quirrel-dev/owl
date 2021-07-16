@@ -112,7 +112,7 @@ export class Worker<ScheduleType extends string> implements Closable {
       setImmediate(() => {
         throttled = false;
         this.logger?.trace("received pub/sub message");
-        this.distributor.checkForNewJobs("");
+        this.distributor.checkForNewJobs();
       });
     };
 
@@ -142,11 +142,8 @@ export class Worker<ScheduleType extends string> implements Closable {
   }
 
   private readonly distributor = new JobDistributor(
-    async function* () {
-      yield [""];
-    },
-    tracer.wrap("peek-queue", (span) => async (tenant) => {
-      this.logger?.trace({ tenant }, "Peeking into queue");
+    tracer.wrap("peek-queue", (span) => async () => {
+      this.logger?.trace("Peeking into queue");
       const result = await this.redis.request(Date.now());
 
       if (!result) {
@@ -174,7 +171,7 @@ export class Worker<ScheduleType extends string> implements Closable {
 
       return ["success", result];
     }),
-    tracer.wrap("run-job", (span) => async (result, tenant) => {
+    tracer.wrap("run-job", (span) => async (result) => {
       const [
         _queue,
         _id,
