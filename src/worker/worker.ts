@@ -15,30 +15,6 @@ import * as tracer from "../shared/tracer";
 import * as opentracing from "opentracing";
 import type { Logger } from "pino";
 
-declare module "ioredis" {
-  interface Commands {
-    request(
-      currentTimestamp: number
-    ): Promise<
-      | [
-          queue: string,
-          id: string,
-          payload: string,
-          runAt: string,
-          schedule_type: string,
-          schedule_meta: string,
-          count: string,
-          max_times: string,
-          exclusive: "true" | "false",
-          retry: string | null
-        ]
-      | null
-      | -1
-      | number
-    >;
-  }
-}
-
 export type Processor<ScheduleType extends string> = (
   job: Readonly<Job<ScheduleType>>,
   ackDescriptor: AcknowledgementDescriptor,
@@ -70,7 +46,6 @@ export function getNextExecutionDate<ScheduleType extends string>(
 
 export class Worker<ScheduleType extends string> implements Closable {
   private readonly redis;
-  private readonly redisSub;
 
   public readonly acknowledger: Acknowledger<ScheduleType>;
 
@@ -83,7 +58,6 @@ export class Worker<ScheduleType extends string> implements Closable {
     private readonly maximumConcurrency = 100
   ) {
     this.redis = redisFactory();
-    this.redisSub = redisFactory();
 
     this.acknowledger = new Acknowledger(
       this.redis,
@@ -95,37 +69,8 @@ export class Worker<ScheduleType extends string> implements Closable {
     defineLocalCommands(this.redis, __dirname);
   }
 
-  public async start() {
-    await this.listenForPubs();
+  public start() {
     this.distributor.start();
-  }
-
-  private async listenForPubs() {
-    let throttled = false;
-    const handleMessage = (channel: string) => {
-      if (throttled) {
-        return;
-      }
-
-      throttled = true;
-
-      setImmediate(() => {
-        throttled = false;
-        this.logger?.trace("received pub/sub message");
-        this.distributor.checkForNewJobs();
-      });
-    };
-
-    this.redisSub.on("pmessage", (_pattern, channel) => {
-      handleMessage(channel);
-    });
-
-    await this.redisSub.psubscribe(
-      "*scheduled",
-      "*invoked",
-      "*rescheduled",
-      "*unblocked"
-    );
   }
 
   private getNextExecutionDate(
@@ -143,40 +88,46 @@ export class Worker<ScheduleType extends string> implements Closable {
 
   private readonly distributor = new JobDistributor(
     tracer.wrap("peek-queue", (span) => async () => {
-      this.logger?.trace("Peeking into queue");
-      const result = await this.redis.request(Date.now());
-
-      if (!result) {
-        span.setTag("result", "empty");
-        return ["empty"];
+      const queueAndId = await this.redis.brpoplpush(
+        "ready",
+        "ready-backup",
+        1000
+      );
+      console.log({queueAndId})
+      if (!queueAndId) {
+        return null;
       }
 
-      if (result === -1) {
-        span.setTag("result", "retry");
-        return ["retry"];
+      const timestamp = await this.redis.zscore("processing", queueAndId);
+      if (!timestamp) {
+        console.log({ timestamp })
+        throw new Error("something is wrong");
+      }
+      const jobObject = await this.redis.hmget(
+        "jobs:" + queueAndId,
+        "payload",
+        "schedule_type",
+        "schedule_meta",
+        "count",
+        "max_times",
+        "exclusive",
+        "retry"
+      );
+      console.log({ jobObject })
+      if (!jobObject) {
+        throw new Error("missing thing unexpectedly");
       }
 
-      if (typeof result === "number") {
-        const timerMaxLimit = 2147483647;
-        const timeout = result - Date.now();
-        if (timeout > timerMaxLimit) {
-          span.setTag("result", "too-long");
-          return ["empty"];
-        } else {
-          span.setTag("result", "wait");
-          span.setTag("wait-for", timeout);
-          return ["wait", timeout];
-        }
-      }
+      await this.redis.publish(queueAndId, "requested");
+      await this.redis.publish("requested", queueAndId);
 
-      return ["success", result];
+      return [queueAndId, timestamp, ...(jobObject as string[])];
     }),
     tracer.wrap("run-job", (span) => async (result) => {
       const [
-        _queue,
-        _id,
-        payload,
+        _queueAndId,
         runAtTimestamp,
+        payload,
         _schedule_type,
         schedule_meta,
         count,
@@ -184,6 +135,7 @@ export class Worker<ScheduleType extends string> implements Closable {
         exclusive,
         retryJSON,
       ] = result;
+      const [_queue, _id] = _queueAndId.split(":");
       const schedule_type = _schedule_type as ScheduleType | undefined;
       const queue = decodeRedisKey(_queue);
       const id = decodeRedisKey(_id);
@@ -255,6 +207,5 @@ export class Worker<ScheduleType extends string> implements Closable {
   public async close() {
     this.distributor.close();
     await this.redis.quit();
-    await this.redisSub.quit();
   }
 }

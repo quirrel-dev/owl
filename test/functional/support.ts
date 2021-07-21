@@ -1,4 +1,5 @@
 import Owl, { OwlConfig } from "../../src";
+import { GateKeeper } from "../../src/gatekeeper/gatekeeper";
 import IORedis, { Redis } from "ioredis";
 import IORedisMock from "ioredis-mock";
 import { Producer } from "../../src/producer/producer";
@@ -56,6 +57,7 @@ export function makeProducerEnv(
         redisFactory: () => new IORedis(process.env.REDIS_URL),
         scheduleMap,
         onError,
+        gateKeeper: { interval: 10 },
         ...config,
       });
     }
@@ -87,6 +89,7 @@ export function makeWorkerEnv(
 
   const workerEnv: typeof producerEnv & {
     worker: Worker<"every">;
+    gateKeeper: GateKeeper;
     jobs: [number, Job][];
     nextExecDates: (number | undefined)[];
     errors: [Job, Error][];
@@ -112,7 +115,9 @@ export function makeWorkerEnv(
     onStartedListeners = [];
     onFinishedListeners = [];
 
-    workerEnv.worker = await producerEnv.owl.createWorker(
+    workerEnv.gateKeeper = producerEnv.owl.createGateKeeper();
+
+    workerEnv.worker = producerEnv.owl.createWorker(
       async (job, ackDescriptor) => {
         onStartedListeners.forEach((listener) => listener(job));
 
@@ -144,6 +149,7 @@ export function makeWorkerEnv(
   workerEnv.teardown = async function teardown() {
     await producerTeardown();
     await workerEnv.worker.close();
+    await workerEnv.gateKeeper.close();
   };
 
   return workerEnv;

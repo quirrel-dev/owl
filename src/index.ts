@@ -6,6 +6,7 @@ import { OnError } from "./shared/acknowledger";
 import { migrate } from "./shared/migrator/migrator";
 import { StaleCheckerConfig } from "./shared/stale-checker";
 import type { Logger } from "pino";
+import { GateKeeper } from "./gatekeeper/gatekeeper";
 
 export { Job, JobEnqueue } from "./Job";
 export { Closable } from "./Closable";
@@ -19,6 +20,7 @@ export interface OwlConfig<ScheduleType extends string> {
   redisFactory: () => Redis;
   scheduleMap: ScheduleMap<ScheduleType>;
   staleChecker?: StaleCheckerConfig;
+  gateKeeper?: { interval: number };
   onError?: OnError<ScheduleType>;
   logger?: Logger;
 }
@@ -29,15 +31,17 @@ export default class Owl<ScheduleType extends string> {
   private readonly staleCheckerConfig?: StaleCheckerConfig;
   private readonly onError?;
   private readonly logger?;
+  private readonly gateKeeperInterval?;
   constructor(config: OwlConfig<ScheduleType>) {
     this.redisFactory = config.redisFactory;
     this.scheduleMap = config.scheduleMap;
     this.staleCheckerConfig = config.staleChecker;
     this.onError = config.onError;
     this.logger = config.logger;
+    this.gateKeeperInterval = config.gateKeeper?.interval;
   }
 
-  public async createWorker(processor: Processor<ScheduleType>) {
+  public createWorker(processor: Processor<ScheduleType>) {
     const worker = new Worker<ScheduleType>(
       this.redisFactory,
       this.scheduleMap,
@@ -46,7 +50,7 @@ export default class Owl<ScheduleType extends string> {
       this.logger
     );
 
-    await worker.start();
+    worker.start();
 
     return worker;
   }
@@ -61,15 +65,20 @@ export default class Owl<ScheduleType extends string> {
     );
   }
 
+  public createGateKeeper() {
+    const gatekeeper = new GateKeeper(
+      this.redisFactory,
+      this.gateKeeperInterval
+    );
+    gatekeeper.start();
+    return gatekeeper;
+  }
+
   public createActivity(
     onEvent: OnActivity,
     options: SubscriptionOptions = {}
   ) {
-    return new Activity<ScheduleType>(
-      this.redisFactory,
-      onEvent,
-      options
-    );
+    return new Activity<ScheduleType>(this.redisFactory, onEvent, options);
   }
 
   public async runMigrations() {
