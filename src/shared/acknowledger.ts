@@ -1,14 +1,13 @@
 import { Pipeline, Redis } from "ioredis";
 import { Span } from "opentracing";
 import type { Logger } from "pino";
-import { encodeRedisKey, tenantToRedisPrefix } from "../encodeRedisKey";
+import { encodeRedisKey } from "../encodeRedisKey";
 import { Job } from "../Job";
 import { Producer } from "../producer/producer";
 import { defineLocalCommands } from "../redis-commands";
 
 declare module "ioredis" {
   type AcknowledgeArgs = [
-    tenantPrefix: string,
     id: string,
     queue: string,
     timestampToRescheduleFor: number | undefined
@@ -23,7 +22,6 @@ declare module "ioredis" {
 }
 
 export interface AcknowledgementDescriptor {
-  tenant: string;
   queueId: string;
   jobId: string;
   timestampForNextRetry?: number;
@@ -59,7 +57,6 @@ export class Acknowledger<ScheduleType extends string> {
     );
     if (!job) {
       job = await this.producer.findById(
-        descriptor.tenant,
         descriptor.queueId,
         descriptor.jobId
       );
@@ -72,7 +69,6 @@ export class Acknowledger<ScheduleType extends string> {
         job = {
           id: descriptor.jobId,
           queue: descriptor.queueId,
-          tenant: descriptor.tenant,
           count: 1,
           exclusive: false,
           payload: "ERROR: Job couldn't be found",
@@ -98,17 +94,15 @@ export class Acknowledger<ScheduleType extends string> {
     const _queueId = encodeRedisKey(queueId);
     const _jobId = encodeRedisKey(jobId);
 
-    const prefix = tenantToRedisPrefix(descriptor.tenant);
-
-    pipeline.publish(prefix + event, `${_queueId}:${_jobId}:${errorString}`);
-    pipeline.publish(prefix + _queueId, `${event}:${_jobId}:${errorString}`);
+    pipeline.publish(event, `${_queueId}:${_jobId}:${errorString}`);
+    pipeline.publish(_queueId, `${event}:${_jobId}:${errorString}`);
     pipeline.publish(
-      prefix + `${_queueId}:${_jobId}`,
+      `${_queueId}:${_jobId}`,
       `${event}:${errorString}`
     );
-    pipeline.publish(prefix + `${_queueId}:${_jobId}:${event}`, errorString);
+    pipeline.publish(`${_queueId}:${_jobId}:${event}`, errorString);
 
-    pipeline.acknowledge(prefix, _jobId, _queueId, timestampToRescheduleFor);
+    pipeline.acknowledge(_jobId, _queueId, timestampToRescheduleFor);
     this.logger?.trace(
       { descriptor, timestampToRescheduleFor },
       "Acknowledger: Job will be reported as failure."
@@ -140,7 +134,7 @@ export class Acknowledger<ScheduleType extends string> {
     options: { dontReschedule?: boolean } = {},
     parentSpan?: Span
   ) {
-    const { queueId, jobId, nextExecutionDate, tenant } = descriptor;
+    const { queueId, jobId, nextExecutionDate } = descriptor;
 
     const span = parentSpan
       ?.tracer()
@@ -154,7 +148,6 @@ export class Acknowledger<ScheduleType extends string> {
     );
 
     await this.redis.acknowledge(
-      tenantToRedisPrefix(tenant),
       encodeRedisKey(jobId),
       encodeRedisKey(queueId),
       options.dontReschedule ? undefined : nextExecutionDate

@@ -11,7 +11,6 @@ describeAcrossBackends("Job Management", (backend) => {
   describe("Producer#scanQueue", () => {
     it("returns pending jobs", async () => {
       const result = await env.producer.enqueue({
-        tenant: "",
         queue: "producer;scan;queue",
         id: "a",
         payload: "a",
@@ -19,7 +18,6 @@ describeAcrossBackends("Job Management", (backend) => {
       });
 
       expect(result).to.deep.eq({
-        tenant: "",
         queue: "producer;scan;queue",
         id: "a",
         payload: "a",
@@ -31,7 +29,6 @@ describeAcrossBackends("Job Management", (backend) => {
       });
 
       await env.producer.enqueue({
-        tenant: "",
         queue: "producer;scan;queue",
         id: "b",
         payload: "b",
@@ -39,7 +36,6 @@ describeAcrossBackends("Job Management", (backend) => {
       });
 
       const { jobs, newCursor } = await env.producer.scanQueue(
-        "",
         "producer;scan;queue",
         0
       );
@@ -54,7 +50,6 @@ describeAcrossBackends("Job Management", (backend) => {
           count: 1,
           exclusive: false,
           retry: [],
-          tenant: "",
         },
         {
           queue: "producer;scan;queue",
@@ -65,14 +60,12 @@ describeAcrossBackends("Job Management", (backend) => {
           count: 1,
           exclusive: false,
           retry: [],
-          tenant: "",
         },
       ]);
 
       expect(newCursor).to.eq(0);
 
       const { jobs: patternJobs } = await env.producer.scanQueuePattern(
-        "",
         "producer;*;*"
       );
       expect(patternJobs).to.have.length(jobs.length);
@@ -82,7 +75,6 @@ describeAcrossBackends("Job Management", (backend) => {
   describe("Producer#findById", () => {
     it("returns the right job", async () => {
       await env.producer.enqueue({
-        tenant: "",
         queue: "producer-find-by-id",
         id: "my-random-id",
         payload: "lol",
@@ -90,13 +82,11 @@ describeAcrossBackends("Job Management", (backend) => {
       });
 
       const job = await env.producer.findById(
-        "",
         "producer-find-by-id",
         "my-random-id"
       );
 
       expect(job).to.deep.eq({
-        tenant: "",
         queue: "producer-find-by-id",
         id: "my-random-id",
         payload: "lol",
@@ -111,7 +101,6 @@ describeAcrossBackends("Job Management", (backend) => {
     describe("when giving non-existing ID", () => {
       it("returns null", async () => {
         const job = await env.producer.findById(
-          "",
           "producer-find-by-id",
           "my-random-id"
         );
@@ -124,30 +113,24 @@ describeAcrossBackends("Job Management", (backend) => {
   describe("Producer#invoke", () => {
     it("moves job to be executed immediately", async () => {
       await env.producer.enqueue({
-        tenant: "",
         queue: "producer-invoke",
         id: "a",
         payload: "a",
         runAt: new Date("1970-10-27T07:36:56.321Z"),
       });
 
-      const job = await env.producer.findById("", "producer-invoke", "a");
+      const job = await env.producer.findById("producer-invoke", "a");
       expect(+job.runAt).to.equal(+new Date("1970-10-27T07:36:56.321Z"));
 
-      const result = await env.producer.invoke("", "producer-invoke", "a");
+      const result = await env.producer.invoke("producer-invoke", "a");
       expect(result).to.equal("invoked");
 
-      const invokedJob = await env.producer.findById(
-        "",
-        "producer-invoke",
-        "a"
-      );
+      const invokedJob = await env.producer.findById("producer-invoke", "a");
       expect(+invokedJob.runAt).to.be.closeTo(Date.now(), 20);
     });
 
     it("returns null if not found", async () => {
       const result = await env.producer.invoke(
-        "",
         "producer-invoke",
         "non-existant"
       );
@@ -158,15 +141,14 @@ describeAcrossBackends("Job Management", (backend) => {
   describe("Producer#delete", () => {
     it("deletes pending job", async () => {
       await env.producer.enqueue({
-        tenant: "",
         queue: "producer-delete",
         id: "a",
         payload: "a",
       });
 
-      await env.producer.delete("", "producer-delete", "a");
+      await env.producer.delete("producer-delete", "a");
 
-      const job = await env.producer.findById("", "producer-delete", "a");
+      const job = await env.producer.findById("producer-delete", "a");
       expect(job).to.be.null;
     });
   });

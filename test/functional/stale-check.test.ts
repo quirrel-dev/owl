@@ -27,7 +27,6 @@ describeAcrossBackends("stale-check", (backend) => {
     });
 
     await env.producer.enqueue({
-      tenant: "",
       id: "stalling-job",
       payload: "i am stalling, just like susanne",
       queue: "stally-stall",
@@ -43,7 +42,6 @@ describeAcrossBackends("stale-check", (backend) => {
     expect(env.errors).to.deep.equal([
       [
         {
-          tenant: "",
           jobId: "stalling-job",
           queueId: "stally-stall",
           timestampForNextRetry: undefined,
@@ -67,7 +65,6 @@ describeAcrossBackends("stale-check", (backend) => {
     });
 
     await env.producer.enqueue({
-      tenant: "",
       id: "retryable-stalling-job",
       payload: "i am stalling, just like susanne",
       queue: "retry-stally-stall",
@@ -92,7 +89,6 @@ describeAcrossBackends("stale-check", (backend) => {
     });
 
     await env.producer.enqueue({
-      tenant: "",
       id: "non-stalling-job",
       payload: "i am not stalling",
       queue: "unstally-stall",
@@ -114,7 +110,6 @@ describeAcrossBackends("stale-check", (backend) => {
       });
 
       await env.producer.enqueue({
-        tenant: "",
         id: "@cron",
         payload: "null",
         queue: "cron-job",
@@ -128,7 +123,7 @@ describeAcrossBackends("stale-check", (backend) => {
 
       await env.producer.staleChecker.check();
 
-      const job = await env.producer.findById("", "cron-job", "@cron");
+      const job = await env.producer.findById("cron-job", "@cron");
       expect(job).not.to.be.null;
       expect(+job.runAt).to.be.greaterThan(Date.now());
     });

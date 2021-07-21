@@ -2,12 +2,10 @@ import type { Redis } from "ioredis";
 import type { Logger } from "pino";
 import { ScheduleMap } from "..";
 import { Closable } from "../Closable";
-import { tenantToRedisPrefix } from "../encodeRedisKey";
 import type { Producer } from "../producer/producer";
 import { computeTimestampForNextRetry } from "../worker/retry";
 import { getNextExecutionDate } from "../worker/worker";
 import type { Acknowledger } from "./acknowledger";
-import { scanTenantsForProcessing } from "./scan-tenants";
 
 function valueAndScoreToObj(arr: (string | number)[]) {
   const result: { value: string; score: number }[] = [];
@@ -93,100 +91,76 @@ export class StaleChecker<ScheduleType extends string> implements Closable {
 
   public async check() {
     this.logger?.trace("Stale-Checker: Starting.");
-    for await (const tenants of scanTenantsForProcessing(this.redis)) {
-      await Promise.all(
-        tenants.map(async (tenant) => {
-          this.logger?.trace({ tenant }, "Stale-Checker: Starting for tenant.");
+    const staleJobDescriptors = await this.zremrangebyscoreandreturn(
+      "processing",
+      "-inf",
+      this.getMaxDate()
+    );
 
-          const staleJobDescriptors = await this.zremrangebyscoreandreturn(
-            tenantToRedisPrefix(tenant) + "processing",
-            "-inf",
-            this.getMaxDate()
-          );
+    if (staleJobDescriptors.length === 0) {
+      this.logger?.trace("Stale-Checker: No stale jobs found.");
+      return;
+    }
 
-          if (staleJobDescriptors.length === 0) {
-            this.logger?.trace(
-              { tenant },
-              "Stale-Checker: No stale jobs found."
-            );
-            return;
-          }
+    this.logger?.trace(
+      { staleJobDescriptors },
+      "Stale-Checker: Found stale jobs."
+    );
 
-          this.logger?.trace(
-            { staleJobDescriptors, tenant },
-            "Stale-Checker: Found stale jobs."
-          );
+    const staleJobs = await this.producer.findJobs(
+      staleJobDescriptors.map(({ value }) => this.parseJobDescriptor(value))
+    );
 
-          const staleJobs = await this.producer.findJobs(
-            tenant,
-            staleJobDescriptors.map(({ value }) =>
-              this.parseJobDescriptor(value)
-            )
-          );
+    const pipeline = this.redis.pipeline();
 
-          const pipeline = this.redis.pipeline();
+    const error = "Job Timed Out";
 
-          const error = "Job Timed Out";
+    for (let i = 0; i < staleJobs.length; i++) {
+      const job = staleJobs[0];
+      const score = staleJobDescriptors[0].score;
+      if (!job) {
+        this.logger?.error("Stale-Checker: Expected job to still exist");
+        continue;
+      }
 
-          for (let i = 0; i < staleJobs.length; i++) {
-            const job = staleJobs[0];
-            const score = staleJobDescriptors[0].score;
-            if (!job) {
-              this.logger?.error(
-                { tenant },
-                "Stale-Checker: Expected job to still exist"
-              );
-              continue;
-            }
+      const timestampForNextRetry = computeTimestampForNextRetry(
+        job.runAt,
+        job.retry,
+        job.count
+      );
 
-            const timestampForNextRetry = computeTimestampForNextRetry(
-              job.runAt,
-              job.retry,
-              job.count
-            );
+      // TODO: duplicated logic in producer, please extract
+      let nextExecutionDate: number | undefined = undefined;
 
-            // TODO: duplicated logic in producer, please extract
-            let nextExecutionDate: number | undefined = undefined;
+      if (!job.schedule?.times || job.count < job.schedule?.times) {
+        nextExecutionDate = getNextExecutionDate(
+          this.scheduleMap,
+          job.schedule?.type,
+          job.schedule?.meta ?? "",
+          new Date(score)
+        );
+      }
 
-            if (!job.schedule?.times || job.count < job.schedule?.times) {
-              nextExecutionDate = getNextExecutionDate(
-                this.scheduleMap,
-                job.schedule?.type,
-                job.schedule?.meta ?? "",
-                new Date(score)
-              );
-            }
+      this.logger?.trace(
+        { job },
+        "Stale-Checker: Adding Failure report to pipeline"
+      );
 
-            this.logger?.trace(
-              { tenant, job },
-              "Stale-Checker: Adding Failure report to pipeline"
-            );
-
-            await this.acknowledger._reportFailure(
-              {
-                tenant,
-                queueId: job.queue,
-                jobId: job.id,
-                timestampForNextRetry,
-                nextExecutionDate,
-              },
-              job,
-              error,
-              pipeline
-            );
-          }
-
-          this.logger?.trace(
-            { tenant },
-            "Stale-Checker: Starting pipeline execution"
-          );
-          await pipeline.exec();
-          this.logger?.trace(
-            { tenant },
-            "Stale-Checker: Pipeline execution successful"
-          );
-        })
+      await this.acknowledger._reportFailure(
+        {
+          queueId: job.queue,
+          jobId: job.id,
+          timestampForNextRetry,
+          nextExecutionDate,
+        },
+        job,
+        error,
+        pipeline
       );
     }
+
+    this.logger?.trace("Stale-Checker: Starting pipeline execution");
+    await pipeline.exec();
+    this.logger?.trace("Stale-Checker: Pipeline execution successful");
   }
 }

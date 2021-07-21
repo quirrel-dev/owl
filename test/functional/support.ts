@@ -168,7 +168,7 @@ export function makeActivityEnv(backend: Backend, fail?: WorkerFailPredicate) {
 
     activityEnv.events = [];
 
-    activityEnv.activity = workerEnv.owl.createActivity("", (event) => {
+    activityEnv.activity = workerEnv.owl.createActivity((event) => {
       activityEnv.events.push(event);
     });
 
