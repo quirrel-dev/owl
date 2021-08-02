@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { makeActivityEnv } from "./support";
-import { describeAcrossBackends, makeSignal, waitUntil } from "../util";
+import { delay, describeAcrossBackends, makeSignal, waitUntil } from "../util";
 
 describeAcrossBackends("Retry", (backend) => {
   const env = makeActivityEnv(backend, (job) => {
@@ -112,6 +112,57 @@ describeAcrossBackends("Retry", (backend) => {
           "scheduled",
           "requested",
           "acknowledged",
+        ]);
+      });
+    });
+
+    describe("overriding a job that's retried", () => {
+      it("prevents future retries", async () => {
+        const finishedFirstRetry = makeSignal();
+        const finishedOverride = makeSignal();
+
+        env.onStartedJob((job) => {
+          if (job.count === 1) {
+            finishedFirstRetry.signal();
+          }
+
+          if (job.payload === "b") {
+            finishedOverride.signal();
+          }
+        });
+
+        await env.producer.enqueue({
+          queue: "retry-override",
+          id: "a",
+          payload: "a",
+          retry: [100, 200],
+        });
+
+        await finishedFirstRetry;
+        await delay(10);
+
+        await env.producer.enqueue({
+          queue: "retry-override",
+          id: "a",
+          payload: "b",
+          override: true,
+        });
+
+        await finishedOverride;
+
+        await delay(400);
+
+        expect(env.events.map((e) => e.type)).to.deep.equal([
+          "scheduled", // job a ...
+          "requested", // .. begins work ...
+          "retry", // ... fails ...
+          "acknowledged",
+          "rescheduled", // ... so it's rescheduled!
+          "scheduled", // job b overrides it
+          "requested",
+          "fail", // it doesn't have retry, so it "fails"
+          "acknowledged",
+          // no other executions
         ]);
       });
     });
