@@ -158,12 +158,13 @@ describeAcrossBackends("Exclusive", (backend) => {
             payload: id,
             queue: "717-repro",
             runAt,
+            override: true,
             exclusive: true,
           })
         )
       );
 
-      await waitUntilEvent("acknowledged", "4", 1000);
+      await waitUntilEvent("acknowledged", "4", 200);
 
       expectInOrder([
         eventIndex("requested", "1"),
