@@ -1,3 +1,4 @@
+import { pseudoRandomBytes } from "crypto";
 import { Logger } from "pino";
 import { Closable } from "../Closable";
 
@@ -15,13 +16,10 @@ export class JobDistributor<T> implements Closable {
   }
 
   constructor(
-    private readonly fetch: () => Promise<
-      ["empty"] | ["retry"] | ["success", T] | ["wait", number]
-    >,
+    private readonly fetch: () => Promise<T | null>,
     private readonly run: (job: T) => Promise<void>,
     private readonly logger?: Logger,
-    public readonly maxJobs: number = 100,
-    private readonly autoCheckEvery: number = 1000
+    public readonly maxJobs: number = 100
   ) {}
 
   public async start() {
@@ -36,7 +34,7 @@ export class JobDistributor<T> implements Closable {
       await this.run(job);
       this.logger?.trace({ job }, "Distributor: Finished work on job");
     } catch (e) {
-      this.logger?.error(e);
+      this.logger?.error(e as any);
       console.error(e);
     }
 
@@ -45,75 +43,24 @@ export class JobDistributor<T> implements Closable {
     this.checkForNewJobs();
   }
 
-  // DI for testing
-  setTimeout: (cb: () => void, timeout: number) => NodeJS.Timeout =
-    global.setTimeout;
-
-  private delayAutoCheck() {
-    this.checkAgainAfter(this.autoCheckEvery);
-  }
-
-  nextCheck: { handle: NodeJS.Timeout; time: number } | null = null;
-
-  private checkAgainAfter(millis: number) {
+  public async checkForNewJobs() {
     if (this.isClosed) {
       return;
     }
 
-    const date = Date.now() + millis;
-    const alreadyCheckingSometimeBefore =
-      this.nextCheck && this.nextCheck.time < date;
-    if (alreadyCheckingSometimeBefore) {
-      return;
-    }
-
-    if (this.nextCheck) {
-      clearTimeout(this.nextCheck.handle);
-    }
-    this.nextCheck = {
-      time: date,
-      handle: this.setTimeout(() => {
-        this.nextCheck = null;
-        this.checkForNewJobs();
-      }, millis),
-    };
-  }
-
-  public async checkForNewJobs() {
     this.logger?.trace("Checking for jobs");
-    this.delayAutoCheck();
-
-    while (!this.isPacked) {
-      const result = await this.fetch();
-      this.logger?.trace({ result }, "Checking for jobs finished");
-      switch (result[0]) {
-        case "empty": {
-          return;
-        }
-
-        case "success": {
-          const job = result[1];
-          this.workOn(job);
-          continue;
-        }
-
-        case "wait": {
-          const waitFor = result[1];
-          this.checkAgainAfter(waitFor);
-          return;
-        }
-
-        case "retry": {
-          continue;
-        }
+    while (!this.isPacked && !this.isClosed) {
+      const job = await this.fetch();
+      this.logger?.trace({ job }, "Checking for jobs finished");
+      if (!job) {
+        return;
       }
+
+      this.workOn(job);
     }
   }
 
   close() {
     this.isClosed = true;
-    if (this.nextCheck) {
-      clearTimeout(this.nextCheck.handle);
-    }
   }
 }
