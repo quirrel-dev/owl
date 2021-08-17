@@ -25,6 +25,7 @@ else
 end
 
 redis.call("HINCRBY", "soft-block", jobQueue, -1)
+redis.call("SREM", "blocked-queues", jobQueue)
 
 local blockedJobsByQueue = "blocked:" .. jobQueue
 local blocked = redis.call("ZRANGE", blockedJobsByQueue, 0, -1, "WITHSCORES")
@@ -39,6 +40,5 @@ if #blocked > 0 then
   end
 
   redis.call("DEL", blockedJobsByQueue)
-  redis.call("SREM", "blocked-queues", jobQueue)
   redis.call("PUBLISH", "unblocked", jobQueue)
 end

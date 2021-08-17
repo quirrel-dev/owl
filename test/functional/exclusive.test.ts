@@ -5,7 +5,7 @@ import { makeActivityEnv } from "./support";
 
 function expectInOrder(numbers: number[]) {
   expect(numbers).to.not.contain(-1);
-  expect(numbers).to.eql([...numbers].sort());
+  expect(numbers).to.eql([...numbers].sort((a, b) => a - b));
 }
 
 describeAcrossBackends("Exclusive", (backend) => {
@@ -138,6 +138,41 @@ describeAcrossBackends("Exclusive", (backend) => {
         eventIndex("acknowledged", "b"),
         eventIndex("requested", "c"),
         eventIndex("acknowledged", "c"),
+      ]);
+    });
+
+    it("repro quirrel#717", async () => {
+      const date1 = new Date(Date.now() + 50);
+      const date2 = new Date(Date.now() + 100);
+      const objects = [
+        { id: "1", runAt: date1 },
+        { id: "2", runAt: date1 },
+        { id: "3", runAt: date2 },
+        { id: "4", runAt: date2 },
+      ];
+
+      await Promise.all(
+        objects.map(({ id, runAt }) =>
+          env.producer.enqueue({
+            id,
+            payload: id,
+            queue: "717-repro",
+            runAt,
+            override: true,
+            exclusive: true,
+          })
+        )
+      );
+
+      await waitUntilEvent("acknowledged", "4", 200);
+
+      expectInOrder([
+        eventIndex("requested", "1"),
+        eventIndex("acknowledged", "1"),
+        eventIndex("requested", "2"),
+        eventIndex("acknowledged", "2"),
+        eventIndex("requested", "4"),
+        eventIndex("acknowledged", "4"),
       ]);
     });
   });
