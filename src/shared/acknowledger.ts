@@ -70,7 +70,6 @@ export class Acknowledger<ScheduleType extends string> {
           id: descriptor.jobId,
           queue: descriptor.queueId,
           count: 1,
-          exclusive: false,
           payload: "ERROR: Job couldn't be found",
           retry: [],
           runAt: new Date(0),

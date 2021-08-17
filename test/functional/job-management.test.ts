@@ -24,7 +24,6 @@ describeAcrossBackends("Job Management", (backend) => {
         runAt: new Date("2020-10-27T07:36:56.321Z"),
         count: 1,
         schedule: undefined,
-        exclusive: false,
         retry: [],
       });
 
@@ -48,7 +47,6 @@ describeAcrossBackends("Job Management", (backend) => {
           runAt: new Date("2020-10-27T07:36:56.321Z"),
           schedule: undefined,
           count: 1,
-          exclusive: false,
           retry: [],
         },
         {
@@ -58,7 +56,6 @@ describeAcrossBackends("Job Management", (backend) => {
           runAt: new Date("2020-10-27T07:36:56.321Z"),
           schedule: undefined,
           count: 1,
-          exclusive: false,
           retry: [],
         },
       ]);
@@ -93,7 +90,6 @@ describeAcrossBackends("Job Management", (backend) => {
         runAt: new Date("2020-10-27T07:36:56.321Z"),
         schedule: undefined,
         count: 1,
-        exclusive: false,
         retry: [],
       });
     });

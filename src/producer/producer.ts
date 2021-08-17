@@ -22,7 +22,6 @@ declare module "ioredis" {
       schedule_meta: string | undefined,
       times: number | undefined,
       overwrite: boolean,
-      exclusive: boolean,
       retryIntervals: string
     ): Promise<0 | 1>;
 
@@ -93,7 +92,6 @@ export class Producer<ScheduleType extends string> implements Closable {
       job.schedule?.meta,
       job.schedule?.times,
       job.override ?? false,
-      job.exclusive ?? false,
       JSON.stringify(retry)
     );
     this.logger?.debug({ job }, "Producer: Enqueued");
@@ -104,7 +102,6 @@ export class Producer<ScheduleType extends string> implements Closable {
       count: 1,
       payload: job.payload,
       runAt: job.runAt,
-      exclusive: job.exclusive ?? false,
       schedule: job.schedule,
       retry,
     };
@@ -199,7 +196,6 @@ export class Producer<ScheduleType extends string> implements Closable {
         schedule_meta,
         count,
         max_times,
-        exclusive,
         retry,
       } = hgetallResult;
 
@@ -215,7 +211,6 @@ export class Producer<ScheduleType extends string> implements Closable {
         queue,
         payload,
         runAt: new Date(runAt),
-        exclusive: exclusive === "true",
         schedule: schedule_type
           ? {
               type: schedule_type,

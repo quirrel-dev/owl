@@ -32,19 +32,17 @@ describeAcrossBackends("Exclusive", (backend) => {
     await waitUntil(() => eventIndex(type, id) !== -1, maxWait);
   }
 
-  describe("exclusive: false", () => {
+  describe("non-exclusive", () => {
     it("executes jobs in parallel", async () => {
       await env.producer.enqueue({
         id: "a",
         payload: "block:10",
         queue: "my-queue",
-        exclusive: false,
       });
       await env.producer.enqueue({
         id: "b",
         payload: "block:10",
         queue: "my-queue",
-        exclusive: false,
       });
 
       await waitUntilEvent("acknowledged", "b");
@@ -69,76 +67,20 @@ describeAcrossBackends("Exclusive", (backend) => {
     ]);
   }
 
-  describe("exclusive: true", () => {
+  describe("exclusive", () => {
     it("executes jobs in serial", async () => {
       await env.producer.enqueue({
         id: "a",
         payload: "abcde",
-        queue: "my-queue",
-        exclusive: true,
+        queue: "my-queue-exclusive",
       });
       await env.producer.enqueue({
         id: "b",
         payload: "abcde",
-        queue: "my-queue",
-        exclusive: true,
+        queue: "my-queue-exclusive",
       });
 
       await expectToBeExecutedInSerial();
-    });
-  });
-
-  describe("non-exclusive followed by exclusive", () => {
-    it("executes jobs in serial", async () => {
-      await env.producer.enqueue({
-        id: "a",
-        payload: "abcde",
-        queue: "my-queue",
-        exclusive: false,
-      });
-
-      await env.producer.enqueue({
-        id: "b",
-        payload: "abcde",
-        queue: "my-queue",
-        exclusive: true,
-      });
-
-      await expectToBeExecutedInSerial();
-    });
-
-    it("does not starve", async () => {
-      await env.producer.enqueue({
-        id: "a",
-        payload: "block:50",
-        queue: "my-queue",
-        exclusive: false,
-      });
-
-      await env.producer.enqueue({
-        id: "b",
-        payload: "2",
-        queue: "my-queue",
-        exclusive: true,
-      });
-
-      await env.producer.enqueue({
-        id: "c",
-        payload: "2",
-        queue: "my-queue",
-        exclusive: false,
-      });
-
-      await waitUntilEvent("acknowledged", "c", 300);
-
-      expectInOrder([
-        eventIndex("requested", "a"),
-        eventIndex("acknowledged", "a"),
-        eventIndex("requested", "b"),
-        eventIndex("acknowledged", "b"),
-        eventIndex("requested", "c"),
-        eventIndex("acknowledged", "c"),
-      ]);
     });
   });
 });

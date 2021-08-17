@@ -29,7 +29,6 @@ declare module "ioredis" {
           schedule_meta: string,
           count: string,
           max_times: string,
-          exclusive: "true" | "false",
           retry: string | null
         ]
       | null
@@ -102,7 +101,8 @@ export class Worker<ScheduleType extends string> implements Closable {
 
   private async listenForPubs() {
     let throttled = false;
-    const handleMessage = (channel: string) => {
+
+    this.redisSub.on("message", () => {
       if (throttled) {
         return;
       }
@@ -114,17 +114,13 @@ export class Worker<ScheduleType extends string> implements Closable {
         this.logger?.trace("received pub/sub message");
         this.distributor.checkForNewJobs();
       });
-    };
-
-    this.redisSub.on("pmessage", (_pattern, channel) => {
-      handleMessage(channel);
     });
 
-    await this.redisSub.psubscribe(
-      "*scheduled",
-      "*invoked",
-      "*rescheduled",
-      "*unblocked"
+    await this.redisSub.subscribe(
+      "scheduled",
+      "invoked",
+      "rescheduled",
+      "unblocked"
     );
   }
 
@@ -181,7 +177,6 @@ export class Worker<ScheduleType extends string> implements Closable {
         schedule_meta,
         count,
         max_times,
-        exclusive,
         retryJSON,
       ] = result;
       const schedule_type = _schedule_type as ScheduleType | undefined;
@@ -196,7 +191,6 @@ export class Worker<ScheduleType extends string> implements Closable {
         payload,
         runAt,
         count: +count,
-        exclusive: exclusive === "true",
         schedule: schedule_type
           ? {
               type: schedule_type,

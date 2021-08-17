@@ -108,7 +108,7 @@ export class Activity<ScheduleType extends string> implements Closable {
   }
 
   private async handleMessage(channel: string, message: string) {
-    const [_type, ...args] = splitEvent(message, 9);
+    const [_type, ...args] = splitEvent(message, 8);
     const type = _type as OnActivityEvent["type"];
 
     const channelParts = channel.split(":").map(decodeRedisKey);
@@ -124,7 +124,6 @@ export class Activity<ScheduleType extends string> implements Closable {
         schedule_type,
         schedule_meta,
         max_times,
-        exclusive,
         count,
         retryJson,
         payload,
@@ -137,7 +136,6 @@ export class Activity<ScheduleType extends string> implements Closable {
           payload,
           runAt: new Date(+runDate),
           count: Number(count),
-          exclusive: exclusive === "true",
           retry: JSON.parse(retryJson),
           schedule: schedule_type
             ? {

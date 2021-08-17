@@ -23,9 +23,14 @@ end
 
 local queue, id = queueAndId:match("([^,]+):([^,]+)")
 
+local function ends_with(str, ending)
+  return str:sub(-#ending) == ending
+end
+local exclusive = ends_with(queue, "exclusive")
+
 redis.call("ZREM", "queue", queueAndId)
 
-if redis.call("SISMEMBER", "blocked-queues", queue) == 1 then
+if exclusive and redis.call("SISMEMBER", "blocked-queues", queue) == 1 then
   redis.call("ZADD", "blocked:" .. queue, scoreString, id)
   return JOB_FOUND_BUT_BLOCKED
 end
@@ -33,7 +38,7 @@ end
 local jobData = redis.call(
   "HMGET", "jobs:" .. queueAndId,
   "payload", "schedule_type", "schedule_meta",
-  "count", "max_times", "exclusive", "retry"
+  "count", "max_times", "retry"
 )
 
 local payload = jobData[1]
@@ -41,10 +46,9 @@ local schedule_type = jobData[2]
 local schedule_meta = jobData[3]
 local count = jobData[4]
 local max_times = jobData[5]
-local exclusive = jobData[6]
-local retry = jobData[7]
+local retry = jobData[6]
 
-if exclusive == "true" then
+if exclusive then
   redis.call("SADD", "blocked-queues", queue)
 
   local currentlyExecutingJobs = redis.call("HGET", "soft-block", queue)
@@ -61,4 +65,4 @@ redis.call("ZADD", "processing", currentTimestamp, queueAndId)
 redis.call("PUBLISH", queue .. ":" .. id, "requested")
 redis.call("PUBLISH", "requested", queue .. ":" .. id)
 
-return { queue, id, payload, score, schedule_type, schedule_meta, count, max_times, exclusive, retry }
+return { queue, id, payload, score, schedule_type, schedule_meta, count, max_times, retry }
