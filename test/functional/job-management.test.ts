@@ -146,7 +146,12 @@ describeAcrossBackends("Job Management", (backend) => {
         payload: "a",
       });
 
-      await env.producer.delete("producer-delete", "a");
+      expect(
+        await env.producer.delete("producer-delete", "non-existant")
+      ).to.eql("not_found");
+      expect(await env.producer.delete("producer-delete", "a")).to.eql(
+        "deleted"
+      );
 
       const job = await env.producer.findById("producer-delete", "a");
       expect(job).to.be.null;
