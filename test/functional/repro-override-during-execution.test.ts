@@ -5,10 +5,25 @@ import { delay, describeAcrossBackends, makeSignal } from "../util";
 describeAcrossBackends("Repro: Override during Execution", (backend) => {
   const executionStarted = makeSignal();
   const jobWasOverriden = makeSignal();
+  const secondJobWasCalled = makeSignal();
   const env = makeWorkerEnv(backend, async (job) => {
     if (job.payload === "wait") {
       executionStarted.signal();
       await jobWasOverriden;
+    }
+
+    if (job.payload === "enqueue-second") {
+      await env.producer.enqueue({
+        queue: job.queue,
+        id: job.id,
+        payload: "second",
+        exclusive: true,
+        override: true,
+      });
+    }
+
+    if (job.payload === "second") {
+      secondJobWasCalled.signal();
     }
 
     return false;
@@ -43,6 +58,18 @@ describeAcrossBackends("Repro: Override during Execution", (backend) => {
 
       const job = await env.producer.findById(queue, id);
       expect(+job.runAt).to.equal(+newRunAt);
+    });
+    it("doesnt stop next job from being executed (repro quirrel#739)", async () => {
+      const queue = "doesntstopnext";
+      const id = "foo";
+      await env.producer.enqueue({
+        queue,
+        id,
+        payload: "enqueue-second",
+        exclusive: true,
+      });
+
+      await secondJobWasCalled
     });
   });
 });
