@@ -72,15 +72,16 @@ export function makeProducerEnv(
   return env;
 }
 
-type WorkerFailPredicate = (job: Job<string>) => boolean;
+type WorkerFailPredicate = (job: Job<string>) => Promise<boolean> | boolean;
 
 type JobListener = (job: Job<string>) => void;
 
 export function makeWorkerEnv(
   backend: Backend,
-  fail: WorkerFailPredicate = (job: Job<string>) => false
+  fail: WorkerFailPredicate = (job: Job<string>) => false,
+  config?: Partial<OwlConfig<any>>
 ) {
-  const producerEnv = makeProducerEnv(backend);
+  const producerEnv = makeProducerEnv(backend, config);
 
   const producerSetup = producerEnv.setup;
   const producerTeardown = producerEnv.teardown;
@@ -126,7 +127,7 @@ export function makeWorkerEnv(
           await delay(1);
         }
 
-        if (fail(job)) {
+        if (await fail(job)) {
           await workerEnv.worker.acknowledger.reportFailure(
             ackDescriptor,
             job,
