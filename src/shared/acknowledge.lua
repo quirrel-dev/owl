@@ -12,7 +12,15 @@ redis.call("ZREM", "processing", jobQueue .. ":" .. jobId)
 redis.call("PUBLISH", jobQueue .. ":" .. jobId, "acknowledged")
 redis.call("PUBLISH", "acknowledged", jobQueue .. ":" .. jobId)
 
-if rescheduleFor == '' then
+local wasOverridenDuringExecution = false
+if redis.call("ZSCORE", "queue", jobQueue .. ":" .. jobId) then
+  wasOverridenDuringExecution = true
+elseif redis.call("ZSCORE", "blocked:" .. jobQueue, jobId) then
+  wasOverridenDuringExecution = true
+end
+
+if wasOverridenDuringExecution then
+elseif rescheduleFor == '' then
   redis.call("DEL", jobTableJobKey)
   redis.call("SREM", "queues:" .. jobQueue, jobId)
 else

@@ -72,7 +72,7 @@ export function makeProducerEnv(
   return env;
 }
 
-type WorkerFailPredicate = (job: Job<string>) => boolean;
+type WorkerFailPredicate = (job: Job<string>) => boolean | Promise<boolean>;
 
 type JobListener = (job: Job<string>) => void;
 
@@ -126,7 +126,7 @@ export function makeWorkerEnv(
           await delay(1);
         }
 
-        if (fail(job)) {
+        if (await fail(job)) {
           await workerEnv.worker.acknowledger.reportFailure(
             ackDescriptor,
             job,
