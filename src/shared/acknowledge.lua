@@ -7,11 +7,17 @@ local rescheduleFor = ARGV[3]
 
 local jobTableJobKey = "jobs:" .. jobQueue .. ":" .. jobId
 
-local wasOverridenDuringExecution = redis.call("ZSCORE", "queue", jobQueue .. ":" .. jobId) ~= nil
 redis.call("ZREM", "processing", jobQueue .. ":" .. jobId)
 
 redis.call("PUBLISH", jobQueue .. ":" .. jobId, "acknowledged")
 redis.call("PUBLISH", "acknowledged", jobQueue .. ":" .. jobId)
+
+local wasOverridenDuringExecution = false
+if redis.call("ZSCORE", "queue", jobQueue .. ":" .. jobId) then
+  wasOverridenDuringExecution = true
+elseif redis.call("ZSCORE", "blocked:" .. jobQueue, jobId) then
+  wasOverridenDuringExecution = true
+end
 
 if wasOverridenDuringExecution then
 elseif rescheduleFor == '' then
