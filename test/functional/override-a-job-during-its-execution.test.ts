@@ -4,10 +4,11 @@ import { delay, describeAcrossBackends, makeSignal } from "../util";
 
 describeAcrossBackends("Override during Execution", (backend) => {
   const firstJobWasFinished = makeSignal();
-  let executions = 0
+  let executions = 0;
+  let executionResult;
   const env = makeWorkerEnv(backend, async (job) => {
     if (job.payload === "enqueue-second") {
-      await env.producer.enqueue({
+      executionResult = await env.producer.enqueue({
         queue: job.queue,
         id: job.id,
         payload: "second",
@@ -37,8 +38,8 @@ describeAcrossBackends("Override during Execution", (backend) => {
 
       await delay(100);
 
-      expect(executions).to.equal(2);
-      expect(await env.producer.findById(queue, id)).to.be.null;
+      expect(executions).to.equal(1);
+      expect(executionResult).to.equal("is_in_execution");
     });
   });
 });

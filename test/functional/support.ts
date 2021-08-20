@@ -120,7 +120,7 @@ export function makeWorkerEnv(
         workerEnv.jobs.push([Date.now(), job]);
         workerEnv.nextExecDates.push(ackDescriptor.nextExecutionDate);
 
-        if (job.payload.startsWith("block:")) {
+        if (job.payload?.startsWith("block:")) {
           const duration = job.payload.split(":")[1];
           await delay(+duration);
         } else {

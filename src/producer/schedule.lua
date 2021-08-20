@@ -13,12 +13,19 @@ local retryIntervals = ARGV[10] -- as JSON array
 
 local SCHEDULED = 0
 local ID_ALREADY_EXISTS = 1
+local IS_CURRENTLY_IN_EXECUTION = 2
 
 local jobTableJobKey = "jobs:" .. jobQueue .. ":" .. jobId
 
 if not override then  
   if redis.call("EXISTS", jobTableJobKey) == 1 then
     return ID_ALREADY_EXISTS
+  end
+end
+
+if override then
+  if redis.call("ZSCORE", "processing", jobQueue .. ":" .. jobId) then
+    return IS_CURRENTLY_IN_EXECUTION
   end
 end
 

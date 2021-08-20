@@ -3,10 +3,7 @@ import { Closable } from "../Closable";
 import { Job, JobEnqueue } from "../Job";
 import { Acknowledger, OnError } from "../shared/acknowledger";
 import { StaleChecker, StaleCheckerConfig } from "../shared/stale-checker";
-import {
-  decodeRedisKey,
-  encodeRedisKey,
-} from "../encodeRedisKey";
+import { decodeRedisKey, encodeRedisKey } from "../encodeRedisKey";
 import { defineLocalCommands } from "../redis-commands";
 import type { Logger } from "pino";
 import { ScheduleMap } from "..";
@@ -24,15 +21,11 @@ declare module "ioredis" {
       overwrite: boolean,
       exclusive: boolean,
       retryIntervals: string
-    ): Promise<0 | 1>;
+    ): Promise<0 | 1 | 2>;
 
     delete(id: string, queue: string): Promise<0 | 1>;
 
-    invoke(
-      id: string,
-      queue: string,
-      newRunAt: number
-    ): Promise<0 | 1>;
+    invoke(id: string, queue: string, newRunAt: number): Promise<0 | 1>;
   }
 }
 
@@ -71,7 +64,7 @@ export class Producer<ScheduleType extends string> implements Closable {
 
   public async enqueue(
     job: JobEnqueue<ScheduleType>
-  ): Promise<Job<ScheduleType>> {
+  ): Promise<Job<ScheduleType> | "id_already_exists" | "is_in_execution"> {
     this.logger?.debug({ job }, "Producer: Enqueueing");
 
     if (typeof job.runAt === "undefined") {
@@ -84,7 +77,7 @@ export class Producer<ScheduleType extends string> implements Closable {
       throw new Error("retry and schedule cannot be used together");
     }
 
-    await this.redis.schedule(
+    const scheduleResult = await this.redis.schedule(
       encodeRedisKey(job.id),
       encodeRedisKey(job.queue),
       job.payload,
@@ -96,18 +89,27 @@ export class Producer<ScheduleType extends string> implements Closable {
       job.exclusive ?? false,
       JSON.stringify(retry)
     );
-    this.logger?.debug({ job }, "Producer: Enqueued");
 
-    return {
-      id: job.id,
-      queue: job.queue,
-      count: 1,
-      payload: job.payload,
-      runAt: job.runAt,
-      exclusive: job.exclusive ?? false,
-      schedule: job.schedule,
-      retry,
-    };
+    switch (scheduleResult) {
+      case 0:
+        this.logger?.debug({ job }, "Producer: Enqueued");
+        return {
+          id: job.id,
+          queue: job.queue,
+          count: 1,
+          payload: job.payload,
+          runAt: job.runAt,
+          exclusive: job.exclusive ?? false,
+          schedule: job.schedule,
+          retry,
+        };
+      case 1:
+        this.logger?.debug({ job }, "Producer: Tried to enqueue, but already existed.");
+        return "id_already_exists";
+      case 2:
+        this.logger?.debug({ job }, "Producer: Tried to enqueue, but is already in execution.");
+        return "is_in_execution";
+    }
   }
 
   public async scanQueue(
@@ -164,11 +166,7 @@ export class Producer<ScheduleType extends string> implements Closable {
     const pipeline = this.redis.pipeline();
 
     for (const { queue, id } of ids) {
-      pipeline.hgetall(
-        `jobs:${encodeRedisKey(
-          queue
-        )}:${encodeRedisKey(id)}`
-      );
+      pipeline.hgetall(`jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`);
       pipeline.zscore(
         "queue",
         `${encodeRedisKey(queue)}:${encodeRedisKey(id)}`
