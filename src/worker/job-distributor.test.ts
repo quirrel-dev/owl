@@ -220,7 +220,7 @@ describe(JobDistributor.name, () => {
 
           expect(false).to.be.true;
         } catch (error) {
-          expect(error.message).to.equal("Fetch failed!");
+          expect((error as any).message).to.equal("Fetch failed!");
         }
       });
     });

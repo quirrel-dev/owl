@@ -36,7 +36,7 @@ export class JobDistributor<T> implements Closable {
       await this.run(job);
       this.logger?.trace({ job }, "Distributor: Finished work on job");
     } catch (e) {
-      this.logger?.error(e);
+      this.logger?.error(e as Error);
       console.error(e);
     }
 
