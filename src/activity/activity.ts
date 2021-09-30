@@ -110,7 +110,7 @@ export class Activity<ScheduleType extends string> implements Closable {
     }
 
     const [_type, ...args] = splitEvent(message, 9);
-    const type = _type as OnActivityEvent<any>["type"];
+    const type = _type as OnActivityEvent<ScheduleType>["type"];
 
     const channelParts = channel.split(":").map(decodeRedisKey);
     if (channelParts.length !== 2) {
