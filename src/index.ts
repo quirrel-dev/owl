@@ -61,15 +61,16 @@ export default class Owl<ScheduleType extends string> {
     );
   }
 
+  private activityRedis?: Redis;
+
   public createActivity(
-    onEvent: OnActivity,
+    onEvent: OnActivity<ScheduleType>,
     options: SubscriptionOptions = {}
   ) {
-    return new Activity<ScheduleType>(
-      this.redisFactory,
-      onEvent,
-      options
-    );
+    if (!this.activityRedis) {
+      this.activityRedis = this.redisFactory();
+    }
+    return new Activity(this.activityRedis, onEvent, options);
   }
 
   public async runMigrations() {

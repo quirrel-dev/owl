@@ -157,7 +157,7 @@ export function makeActivityEnv(backend: Backend, fail?: WorkerFailPredicate) {
 
   const activityEnv: typeof workerEnv & {
     activity: Activity<"every">;
-    events: OnActivityEvent[];
+    events: OnActivityEvent<"every">[];
   } = workerEnv as any;
 
   activityEnv.activity = null as any;
