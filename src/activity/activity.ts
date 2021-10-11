@@ -2,7 +2,7 @@ import { Redis } from "ioredis";
 import { Closable } from "../Closable";
 import { decodeRedisKey, encodeRedisKey } from "../encodeRedisKey";
 import { Job } from "../Job";
-import { Producer } from "../producer/producer";
+import minimatch from "minimatch";
 
 /**
  * Like String.split, but has a maximum number of delimiters it picks up.
@@ -34,19 +34,21 @@ function splitEvent(message: string, maxParts: number, delimiter = ":") {
 }
 
 export type SubscriptionOptions = { queue?: string; id?: string };
-export type OnActivity = (event: OnActivityEvent) => Promise<void> | void;
+export type OnActivity<ScheduleType extends string> = (
+  event: OnActivityEvent<ScheduleType>
+) => Promise<void> | void;
 
-export type OnActivityEvent =
-  | ScheduledEvent
+export type OnActivityEvent<ScheduleType extends string> =
+  | ScheduledEvent<ScheduleType>
   | DeletedEvent
   | RequestedEvent
   | InvokedEvent
   | RescheduledEvent
   | AcknowledgedEvent;
 
-interface ScheduledEvent {
+interface ScheduledEvent<ScheduleType extends string> {
   type: "scheduled";
-  job: Job;
+  job: Job<ScheduleType>;
 }
 
 interface InvokedEvent {
@@ -81,35 +83,34 @@ interface AcknowledgedEvent {
 }
 
 export class Activity<ScheduleType extends string> implements Closable {
-  private redis;
-  private producer;
-
+  private readonly pattern: string;
   constructor(
-    redisFactory: () => Redis,
-    private readonly onEvent: OnActivity,
+    private readonly redis: Redis,
+    private readonly onEvent: OnActivity<ScheduleType>,
     options: SubscriptionOptions = {}
   ) {
-    this.redis = redisFactory();
-    this.producer = new Producer<ScheduleType>(redisFactory, null as any);
-
     this.redis.on("pmessage", (_pattern, channel, message) =>
       this.handleMessage(channel, message)
     );
 
-    if (options.queue) {
-      options.queue = encodeRedisKey(options.queue);
-    }
+    const queue = options.queue ? encodeRedisKey(options.queue) : "*";
+    const id = options.id ? encodeRedisKey(options.id) : "*";
+    this.pattern = `${queue}:${id}`;
 
-    if (options.id) {
-      options.id = encodeRedisKey(options.id);
-    }
+    this.redis.psubscribe(this.pattern);
+  }
 
-    this.redis.psubscribe(`${options.queue ?? "*"}:${options.id ?? "*"}`);
+  private matchesPattern(channel: string) {
+    return minimatch(channel, this.pattern);
   }
 
   private async handleMessage(channel: string, message: string) {
+    if (!this.matchesPattern(channel)) {
+      return;
+    }
+
     const [_type, ...args] = splitEvent(message, 9);
-    const type = _type as OnActivityEvent["type"];
+    const type = _type as OnActivityEvent<ScheduleType>["type"];
 
     const channelParts = channel.split(":").map(decodeRedisKey);
     if (channelParts.length !== 2) {
@@ -141,7 +142,7 @@ export class Activity<ScheduleType extends string> implements Closable {
           retry: JSON.parse(retryJson),
           schedule: schedule_type
             ? {
-                type: schedule_type,
+                type: schedule_type as ScheduleType,
                 meta: schedule_meta,
                 times: max_times ? Number(max_times) : undefined,
               }
@@ -166,7 +167,6 @@ export class Activity<ScheduleType extends string> implements Closable {
   }
 
   async close() {
-    await this.redis.quit();
-    await this.producer.close();
+    await this.redis.punsubscribe(this.pattern);
   }
 }

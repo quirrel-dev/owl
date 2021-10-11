@@ -19,6 +19,16 @@ describeAcrossBackends("Activity", (backend) => {
   }
 
   it("publishes all relevant information", async () => {
+    const secondActivityEvents = [];
+    const secondActivity = env.owl.createActivity(
+      (event) => {
+        secondActivityEvents.push(event);
+      },
+      {
+        id: "nonexistent",
+        queue: "nada",
+      }
+    );
     const currentDate = new Date();
 
     await env.producer.enqueue({
@@ -139,5 +149,9 @@ describeAcrossBackends("Activity", (backend) => {
       ],
       200
     );
+
+    expect(secondActivityEvents).to.be.empty;
+
+    await secondActivity.close();
   });
 });
