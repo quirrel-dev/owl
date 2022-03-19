@@ -3,10 +3,7 @@ import { Closable } from "../Closable";
 import { Job, JobEnqueue } from "../Job";
 import { Acknowledger, OnError } from "../shared/acknowledger";
 import { StaleChecker, StaleCheckerConfig } from "../shared/stale-checker";
-import {
-  decodeRedisKey,
-  encodeRedisKey,
-} from "../encodeRedisKey";
+import { decodeRedisKey, encodeRedisKey } from "../encodeRedisKey";
 import { defineLocalCommands } from "../redis-commands";
 import type { Logger } from "pino";
 import { ScheduleMap } from "..";
@@ -28,11 +25,7 @@ declare module "ioredis" {
 
     delete(id: string, queue: string): Promise<0 | 1>;
 
-    invoke(
-      id: string,
-      queue: string,
-      newRunAt: number
-    ): Promise<0 | 1>;
+    invoke(id: string, queue: string, newRunAt: number): Promise<0 | 1>;
   }
 }
 
@@ -164,24 +157,22 @@ export class Producer<ScheduleType extends string> implements Closable {
     const pipeline = this.redis.pipeline();
 
     for (const { queue, id } of ids) {
-      pipeline.hgetall(
-        `jobs:${encodeRedisKey(
-          queue
-        )}:${encodeRedisKey(id)}`
-      );
+      pipeline.hgetall(`jobs:${encodeRedisKey(queue)}:${encodeRedisKey(id)}`);
       pipeline.zscore(
         "queue",
         `${encodeRedisKey(queue)}:${encodeRedisKey(id)}`
       );
+      pipeline.zscore(`blocked:${encodeRedisKey(queue)}`, encodeRedisKey(id));
     }
 
     const jobResults: (Job<ScheduleType> | null)[] = [];
 
     const redisResults = await pipeline.exec();
-    for (let i = 0; i < redisResults.length; i += 2) {
+    for (let i = 0; i < redisResults.length; i += 3) {
       const [hgetallErr, hgetallResult] = redisResults[i];
       const [zscoreErr, zscoreResult] = redisResults[i + 1];
-      const { id: _id, queue: _queue } = ids[i / 2];
+      const [blockedZscoreErr, blockedZscoreResult] = redisResults[i + 2];
+      const { id: _id, queue: _queue } = ids[i / 3];
       const id = decodeRedisKey(_id);
       const queue = decodeRedisKey(_queue);
 
@@ -190,6 +181,10 @@ export class Producer<ScheduleType extends string> implements Closable {
       }
 
       if (zscoreErr) {
+        throw zscoreErr;
+      }
+
+      if (blockedZscoreErr) {
         throw zscoreErr;
       }
 
@@ -208,7 +203,7 @@ export class Producer<ScheduleType extends string> implements Closable {
         continue;
       }
 
-      const runAt = +zscoreResult;
+      const runAt = +(zscoreResult || blockedZscoreResult);
 
       jobResults.push({
         id,
