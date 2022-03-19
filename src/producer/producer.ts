@@ -173,15 +173,20 @@ export class Producer<ScheduleType extends string> implements Closable {
         "queue",
         `${encodeRedisKey(queue)}:${encodeRedisKey(id)}`
       );
+      pipeline.zscore(
+        `blocked:${encodeRedisKey(queue)}`,
+        encodeRedisKey(id)
+      );
     }
 
     const jobResults: (Job<ScheduleType> | null)[] = [];
 
     const redisResults = await pipeline.exec();
-    for (let i = 0; i < redisResults.length; i += 2) {
+    for (let i = 0; i < redisResults.length; i += 3) {
       const [hgetallErr, hgetallResult] = redisResults[i];
       const [zscoreErr, zscoreResult] = redisResults[i + 1];
-      const { id: _id, queue: _queue } = ids[i / 2];
+      const [blockedZscoreErr, blockedZscoreResult] = redisResults[i + 2];
+      const { id: _id, queue: _queue } = ids[i / 3];
       const id = decodeRedisKey(_id);
       const queue = decodeRedisKey(_queue);
 
@@ -190,6 +195,10 @@ export class Producer<ScheduleType extends string> implements Closable {
       }
 
       if (zscoreErr) {
+        throw zscoreErr;
+      }
+
+      if (blockedZscoreErr) {
         throw zscoreErr;
       }
 
@@ -208,7 +217,7 @@ export class Producer<ScheduleType extends string> implements Closable {
         continue;
       }
 
-      const runAt = +zscoreResult;
+      const runAt = +(zscoreResult || blockedZscoreResult);
 
       jobResults.push({
         id,
