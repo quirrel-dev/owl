@@ -67,7 +67,6 @@ export function makeProducerEnv(
   }
 
   async function teardown() {
-    await env.redis.flushall();
     env.redis.disconnect();
     await env.producer.close();
   }
