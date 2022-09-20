@@ -73,6 +73,10 @@ export default class Owl<ScheduleType extends string> {
     return new Activity(this.activityRedis, onEvent, options);
   }
 
+  public async close() {
+    await this.activityRedis?.quit();
+  }
+
   public async runMigrations() {
     const client = this.redisFactory();
     await migrate(client);

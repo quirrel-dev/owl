@@ -68,6 +68,7 @@ export function makeProducerEnv(
 
   async function teardown() {
     env.redis.disconnect();
+    await env.owl.close()
     await env.producer.close();
   }
 
@@ -180,7 +181,6 @@ export function makeActivityEnv(backend: Backend, fail?: WorkerFailPredicate) {
 
   activityEnv.teardown = async function teardown() {
     await workerTeardown();
-    await activityEnv.activity.close();
   };
 
   return activityEnv;
