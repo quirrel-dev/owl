@@ -12,7 +12,7 @@ import type { Logger } from "pino";
 import { ScheduleMap } from "..";
 
 declare module "ioredis" {
-  interface Commands {
+  interface RedisCommander {
     schedule(
       id: string,
       queue: string,
@@ -178,9 +178,16 @@ export class Producer<ScheduleType extends string> implements Closable {
     const jobResults: (Job<ScheduleType> | null)[] = [];
 
     const redisResults = await pipeline.exec();
+    if (!redisResults) {
+      throw new Error("Redis results are null");
+    }
     for (let i = 0; i < redisResults.length; i += 2) {
-      const [hgetallErr, hgetallResult] = redisResults[i];
-      const [zscoreErr, zscoreResult] = redisResults[i + 1];
+      const [hgetallErr, _hgetallResult] = redisResults[i];
+      const hgetallResult = _hgetallResult as Record<string, string>;
+
+      const [zscoreErr, _zscoreResult] = redisResults[i + 1];
+      const zscoreResult = _zscoreResult as number;
+
       const { id: _id, queue: _queue } = ids[i / 2];
       const id = decodeRedisKey(_id);
       const queue = decodeRedisKey(_queue);
@@ -218,7 +225,7 @@ export class Producer<ScheduleType extends string> implements Closable {
         exclusive: exclusive === "true",
         schedule: schedule_type
           ? {
-              type: schedule_type,
+              type: schedule_type as ScheduleType,
               meta: schedule_meta,
               times: max_times ? +max_times : undefined,
             }

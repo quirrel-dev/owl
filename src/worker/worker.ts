@@ -16,7 +16,7 @@ import * as opentracing from "opentracing";
 import type { Logger } from "pino";
 
 declare module "ioredis" {
-  interface Commands {
+  interface RedisCommander {
     request(
       currentTimestamp: number
     ): Promise<
