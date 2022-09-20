@@ -7,6 +7,7 @@ import { Worker } from "../../src/worker/worker";
 import { Job } from "../../src/Job";
 import { AcknowledgementDescriptor } from "../../src/shared/acknowledger";
 import { Backend, delay } from "../util";
+import { randomInt } from "crypto";
 
 export function makeProducerEnv(
   backend: Backend,
@@ -41,9 +42,10 @@ export function makeProducerEnv(
       every: (lastDate: Date, meta: string) => new Date(+lastDate + +meta),
     };
     if (backend === "In-Memory") {
-      env.redis = new IORedisMock();
+      const port = randomInt(3000, 4000)
+      env.redis = new IORedisMock({ port });
       env.owl = new Owl({
-        redisFactory: () => (env.redis as any).createConnectedClient(),
+        redisFactory: () => new IORedisMock({ port }),
         scheduleMap,
         onError,
         ...config,
@@ -66,6 +68,7 @@ export function makeProducerEnv(
 
   async function teardown() {
     env.redis.disconnect();
+    await env.owl.close()
     await env.producer.close();
   }
 
@@ -178,7 +181,6 @@ export function makeActivityEnv(backend: Backend, fail?: WorkerFailPredicate) {
 
   activityEnv.teardown = async function teardown() {
     await workerTeardown();
-    await activityEnv.activity.close();
   };
 
   return activityEnv;

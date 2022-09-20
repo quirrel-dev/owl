@@ -71,6 +71,9 @@ export class StaleChecker<ScheduleType extends string> implements Closable {
       .zremrangebyscore(key, min, max)
       .exec();
 
+    if (!result) {
+      throw new Error("Unexpected result from redis");
+    }
     const [rangeByScoreResult, remRangeByScoreResult] = result;
 
     if (rangeByScoreResult[0]) {
@@ -81,7 +84,7 @@ export class StaleChecker<ScheduleType extends string> implements Closable {
       throw remRangeByScoreResult[0];
     }
 
-    return valueAndScoreToObj(rangeByScoreResult[1]);
+    return valueAndScoreToObj(rangeByScoreResult[1] as any);
   }
 
   private parseJobDescriptor(descriptor: string) {

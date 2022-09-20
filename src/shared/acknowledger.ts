@@ -1,4 +1,4 @@
-import { Pipeline, Redis } from "ioredis";
+import { ChainableCommander, Redis } from "ioredis";
 import { Span } from "opentracing";
 import type { Logger } from "pino";
 import { encodeRedisKey } from "../encodeRedisKey";
@@ -12,12 +12,8 @@ declare module "ioredis" {
     queue: string,
     timestampToRescheduleFor: number | undefined
   ];
-  interface Commands {
+  interface RedisCommander {
     acknowledge(...args: AcknowledgeArgs): Promise<void>;
-  }
-
-  interface Pipeline {
-    acknowledge(...args: AcknowledgeArgs): this;
   }
 }
 
@@ -48,7 +44,7 @@ export class Acknowledger<ScheduleType extends string> {
     descriptor: AcknowledgementDescriptor,
     job: Job<ScheduleType> | null,
     error: any,
-    pipeline: Pipeline,
+    pipeline: ChainableCommander,
     options: { dontReschedule?: boolean } = {}
   ) {
     this.logger?.trace(
@@ -56,10 +52,7 @@ export class Acknowledger<ScheduleType extends string> {
       "Acknowledger: Starting to report failure"
     );
     if (!job) {
-      job = await this.producer.findById(
-        descriptor.queueId,
-        descriptor.jobId
-      );
+      job = await this.producer.findById(descriptor.queueId, descriptor.jobId);
 
       if (!job) {
         this.logger?.error(
@@ -96,10 +89,7 @@ export class Acknowledger<ScheduleType extends string> {
 
     pipeline.publish(event, `${_queueId}:${_jobId}:${errorString}`);
     pipeline.publish(_queueId, `${event}:${_jobId}:${errorString}`);
-    pipeline.publish(
-      `${_queueId}:${_jobId}`,
-      `${event}:${errorString}`
-    );
+    pipeline.publish(`${_queueId}:${_jobId}`, `${event}:${errorString}`);
     pipeline.publish(`${_queueId}:${_jobId}:${event}`, errorString);
 
     pipeline.acknowledge(_jobId, _queueId, timestampToRescheduleFor);
